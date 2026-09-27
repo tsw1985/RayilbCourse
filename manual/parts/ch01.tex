@@ -1,0 +1,111 @@
+\chapter{Before we start}
+
+\section{What raylib actually is}
+
+raylib is a C library that hands you a window, a keyboard, a mouse, a sound card
+and a way to put coloured pixels on screen. That is it. It is not an engine.
+There is no editor, no scene graph, no entity system, no asset pipeline, no
+project format. You write a \lstinline|main()|, you call some functions, you get
+a game.
+
+That is the reason it feels strange at first if you are used to tools that hand
+you a scene and ask you to fill it in. In raylib \emph{you} own the loop. Nothing
+happens that you did not write a line for.
+
+The whole library is about 500 functions, and they are named so plainly that you
+can usually guess them: \lstinline|DrawCircle|, \lstinline|IsKeyDown|,
+\lstinline|LoadTexture|, \lstinline|CheckCollisionRecs|. There is no official
+reference manual, on purpose --- the header file \file{raylib.h} \emph{is} the
+documentation, one line of comment per function, and the examples are the
+tutorial.
+
+\keyidea{If you remember one thing from this manual, remember this: the
+\file{raylib.h} header is the documentation. Open it. Search it. Every function
+you will ever use is in there with a one-line comment explaining it.}
+
+\section{What you need to know already}
+
+C. Not advanced C --- variables, \lstinline|if|, \lstinline|while|, functions,
+arrays and structs are enough. Every piece of code in this manual stays inside
+that. You do not need pointers-to-pointers, you do not need
+\lstinline|malloc|, and you certainly do not need C++.
+
+You do \emph{not} need any 3D background. Chapters 9 to 14 assume you have never
+seen a 3D coordinate system in your life, and build it up from a single arrow on
+a page.
+
+\section{The files that come with this manual}
+
+This manual is not a thing to read in an armchair. Every chapter has a matching
+program you can run, change and break. They live in two folders next to it:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Folder} & \textbf{Part} & \textbf{What is in it} \\
+\midrule
+\file{course2d/} & I & the fundamentals: window, loop, shapes, input, collisions, camera \\
+\file{course3d/} & I & the 3D half: axes, cameras, movement, collisions, the mini Doom \\
+\file{cheatsheet/} & II & one example per module of the official raylib cheatsheet \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each folder has a \file{build.sh} that compiles and runs one of them:
+
+\begin{lstlisting}[style=plain]
+./course2d/build.sh 1        # builds and runs course2d/lesson01_window.c
+./course3d/build.sh 7        # builds and runs the mini Doom
+./cheatsheet/build.sh 9      # builds and runs the audio module example
+\end{lstlisting}
+
+Part I is a path: read it in order and you end up with a game. Part II is a
+reference: each chapter stands alone, so read the one you need when you need it.
+
+The script needs the raylib library to have been built once. If you have never
+run the project, do that first from the root folder:
+
+\begin{lstlisting}[style=plain]
+make                         # builds bin/Debug/libraylib.a and the sample app
+\end{lstlisting}
+
+\section{What a build actually needs}
+
+When people get stuck on day one, it is almost never the code --- it is the
+compiler command. There is no magic in it, so here it is in full, the one that
+\file{build.sh} runs for you:
+
+\begin{lstlisting}[style=plain]
+cc  mygame.c                                   # your source file
+    -o mygame                                  # the program to produce
+    -I build/external/raylib-master/src        # where raylib.h lives
+    bin/Debug/libraylib.a                      # the library itself
+    -lpthread -lm -ldl -lrt -lX11              # what raylib needs on Linux
+\end{lstlisting}
+
+Three ingredients, always: your \file{.c} file, the \emph{header} so the compiler
+knows the function signatures, and the \emph{library} so the linker can find the
+actual code. If you get \lstinline|raylib.h: No such file| you got the
+\lstinline|-I| wrong. If you get \lstinline|undefined reference to InitWindow|
+you got the library path wrong. Those two errors mean two very different things
+and mixing them up costs beginners hours.
+
+\gotcha{The order matters on Linux: the library goes \emph{after} your
+\file{.c} file on the command line, never before. GNU \lstinline|ld| resolves
+symbols left to right, and a library listed first has nothing left to resolve.}
+
+\section{How to read this manual}
+
+Read a chapter, then run its lesson, then go back and change three numbers in the
+lesson until something breaks. That third step is the one that actually teaches
+you. Nothing here can be damaged: the worst that happens is a black window, and
+you press Escape.
+
+The boxes mean:
+
+\gotcha{A mistake almost everyone makes here. Reading these will save you an
+afternoon each.}
+
+\keyidea{The one sentence from the section that is worth carrying with you.}
+
+\tryit{The lesson that shows this chapter running.}{./course2d/build.sh 1}

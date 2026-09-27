@@ -1,0 +1,163 @@
+\chapter{Shaders, and why your cubes look flat}
+
+Chapter 11 told you that plain \lstinline|DrawCube| does no lighting, and left it
+there. This is the chapter that explains what to do about it.
+
+\section{What a shader actually is}
+
+A shader is a small program that runs \textbf{on the GPU}, in parallel, an
+absurd number of times per frame. You write it in GLSL, a C-like language, and
+you get two of them:
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=7mm,
+  every node/.style={font=\sffamily\small},
+  bx/.style={draw=codeframe,fill=rlight,rounded corners=2pt,minimum width=4.6cm,minimum height=9mm,align=center},
+  arrow/.style={-{Stealth[length=5pt]},rgrey}
+]
+\node[bx] (verts) {your vertices};
+\node[bx,right=14mm of verts,fill=white,draw=rblue!50] (vs) {\textbf{VERTEX} shader\\[-1pt]{\footnotesize once per corner}};
+\node[bx,below=of vs,fill=white,draw=rorange!60] (fs) {\textbf{FRAGMENT} shader\\[-1pt]{\footnotesize once per pixel}};
+\node[bx,left=14mm of fs] (screen) {pixels on screen};
+\draw[arrow] (verts) -- (vs);
+\draw[arrow] (vs) -- node[right,font=\sffamily\tiny,text=rgrey] {where things land} (fs);
+\draw[arrow] (fs) -- node[above,font=\sffamily\tiny,text=rgrey] {what colour} (screen);
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item The \textbf{vertex} shader runs once per corner of your geometry and
+        decides \emph{where} it lands on screen.
+  \item The \textbf{fragment} shader runs once per pixel and decides \emph{what
+        colour} that pixel is.
+\end{itemize}
+
+At 1080p a fullscreen effect runs your fragment shader two million times, sixty
+times a second. That is why it must be tiny and why it cannot talk back to your
+C code.
+
+\keyidea{raylib ships a default pair that just draws things normally. You almost
+always write only the fragment shader and pass \lstinline|NULL| for the vertex
+one. Lighting, colour grading, outlines, water, fog --- all fragment shaders.}
+
+\section{The three steps, which never change}
+
+\begin{lstlisting}
+// 1. LOAD, once, outside the loop
+Shader shader = LoadShader(NULL, "glow.fs");          // from files
+Shader shader = LoadShaderFromMemory(NULL, fsCode);   // from a string
+
+// 2. FIND THE SLOTS, once: a lookup by name into the compiled program
+int locTime = GetShaderLocation(shader, "uTime");
+
+// 3. FEED AND USE, every frame
+SetShaderValue(shader, locTime, &time, SHADER_UNIFORM_FLOAT);
+
+BeginShaderMode(shader);
+    DrawTexture(tex, 0, 0, WHITE);     // drawn THROUGH the shader
+EndShaderMode();
+\end{lstlisting}
+
+That \lstinline|Begin|/\lstinline|End| pair is the same contract as the cameras:
+inside it, the shader applies; outside, normal drawing. Your HUD goes outside,
+for the same reason as always.
+
+\section{Uniforms: the only way to talk to the GPU}
+
+A \emph{uniform} is a variable you send from C into the shader. It is called
+uniform because it has the same value for every pixel in that draw call.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{C side} & \textbf{GLSL side} \\
+\midrule
+\lstinline|SHADER_UNIFORM_FLOAT| & \lstinline|uniform float uTime;| \\
+\lstinline|SHADER_UNIFORM_VEC2| & \lstinline|uniform vec2 uLight;| \\
+\lstinline|SHADER_UNIFORM_VEC3| & \lstinline|uniform vec3 uColour;| \\
+\lstinline|SHADER_UNIFORM_INT| & \lstinline|uniform int uMode;| \\
+\lstinline|SetShaderValueTexture| & \lstinline|uniform sampler2D uSecond;| \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\gotcha{\lstinline|GetShaderLocation| returns $-1$ if the name is not found ---
+and GLSL compilers \emph{delete unused uniforms}, so a uniform you declared but
+never read in the shader body will not be there. A silent $-1$ that makes
+\lstinline|SetShaderValue| do nothing is the classic first shader bug.}
+
+\section{A fragment shader, line by line}
+
+\begin{lstlisting}[style=plain]
+#version 330
+
+in vec2 fragTexCoord;             // from the vertex shader: where we are, 0..1
+in vec4 fragColor;                // the tint passed to DrawTexture
+
+uniform sampler2D texture0;       // the texture raylib binds automatically
+uniform vec4 colDiffuse;          // raylib's diffuse colour
+
+out vec4 finalColor;              // what we must write
+
+void main()
+{
+    vec4 texel = texture(texture0, fragTexCoord)*colDiffuse*fragColor;
+    float grey = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
+    finalColor = vec4(grey, grey, grey, texel.a);
+}
+\end{lstlisting}
+
+Four things to notice:
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+  \item \lstinline|#version 330| must be the very first thing in the file or
+        string. Not a comment, not a blank line. On desktop raylib uses GLSL 330.
+  \item \lstinline|texture0|, \lstinline|colDiffuse|, \lstinline|fragTexCoord|
+        and \lstinline|fragColor| are names raylib fills in for you. Spell them
+        exactly or you get nothing.
+  \item \lstinline|vec4| is four floats, and colours here run \textbf{0.0 to
+        1.0}, not 0 to 255.
+  \item The last line of the function must write \lstinline|finalColor|. That is
+        the shader's entire output.
+\end{enumerate}
+
+Those weights \lstinline|(0.299, 0.587, 0.114)| are how bright each channel looks
+to a human eye --- green far more than blue. Averaging the three instead gives a
+muddy grey, which is why this particular triple turns up everywhere.
+
+\section{Errors show up at run time, not compile time}
+
+Your C compiles fine whatever nonsense is in the shader string: the GPU compiler
+only runs when \lstinline|LoadShader| executes. Watch the terminal:
+
+\begin{lstlisting}[style=plain]
+INFO: SHADER: [ID 5] Fragment shader compiled successfully
+INFO: SHADER: [ID 6] Program shader loaded successfully
+\end{lstlisting}
+
+If instead you see \lstinline|SHADER: [ID 5] Failed to compile fragment shader|,
+the line number in the message refers to the \emph{shader} source. A failed
+shader falls back to the default one, so your scene keeps rendering normally and
+the only sign of trouble is that your effect does nothing.
+
+\section{Lighting, honestly}
+
+Real lighting is a fragment shader that receives the surface normal and the light
+positions, and computes how much each light hits each pixel. raylib does not
+build that in --- the \file{examples/shaders/} folder has it, in
+\file{shaders\_basic\_lighting.c}, as about 80 lines of GLSL.
+
+Before you go there, be aware of the cheaper options from chapter 11: wireframes
+over solid shapes, colour variation per object, and a distinct floor and ceiling.
+They cost nothing, they work everywhere, and plenty of good-looking games never
+do anything more.
+
+\keyidea{Learn shaders when flat colour is actually holding your game back, not
+before. It is the deepest rabbit hole in graphics and the easiest place to spend
+three weeks and ship nothing.}
+
+\tryit{Module 3 has three fragment shaders written as C strings --- greyscale, a
+wave distortion driven by a \lstinline|uTime| uniform, and a spotlight that
+follows your mouse. The HUD is drawn outside the pair so you can see what the
+shader does and does not touch.}{./cheatsheet/build.sh 3}

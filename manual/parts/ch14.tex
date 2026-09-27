@@ -1,0 +1,250 @@
+\chapter{Building a silly little Doom}
+
+Everything so far, assembled. The finished program is
+\file{course3d/lesson07\_mini\_doom.c}: a corridor maze you walk through, enemies
+that come after you, a gun that shoots them, and a HUD with a minimap. About 350
+lines, and you have already met every idea in it.
+
+\tryit{Run it first, then read this chapter with the source open next to
+you.}{./course3d/build.sh 7}
+
+\section{The level is a piece of text}
+
+\begin{lstlisting}
+static const char *MAP[MAP_ROWS] = {
+    "###############",
+    "#S....#.......#",
+    "#.....#...E...#",
+    "#.###.#.#####.#",
+    ...
+};
+\end{lstlisting}
+
+\lstinline|#| is a wall, \lstinline|.| is floor, \lstinline|S| is where the
+player starts and \lstinline|E| is an enemy. Designing a level is now typing
+characters into a text editor, and you can redesign the whole game in thirty
+seconds. Plenty of shipped games stored their levels exactly like this.
+
+\section{From map cell to world position}
+
+The map is a grid of rows and columns. The world is metres along X, Y and Z. The
+bridge between them is one function, and it is worth staring at until it is
+obvious:
+
+\begin{lstlisting}
+static Vector3 CellToWorld(int col, int row, float y)
+{
+    return (Vector3){ col*CELL, y, row*CELL };
+}
+\end{lstlisting}
+
+\begin{center}
+\begin{tikzpicture}[scale=0.85,every node/.style={font=\sffamily\footnotesize}]
+  \fill[rlight,rounded corners=3pt] (-0.7,-4.1) rectangle (12.6,1.5);
+
+  % grid
+  \foreach \c in {0,1,2,3} \foreach \r in {0,1,2} {
+    \draw[codeframe,fill=white] (\c*0.9,-\r*0.9) rectangle (\c*0.9+0.9,-\r*0.9-0.9);
+  }
+  \fill[rgrey!45] (0,0) rectangle (0.9,-0.9);
+  \fill[rgrey!45] (0.9*3,0) rectangle (0.9*4,-0.9);
+  \node at (1.8,0.75) {the text map};
+  \node[text=rgrey] at (1.8,-3.2) {column, row};
+
+  \draw[->,rorange,line width=1.2pt] (4.0,-1.2) -- (5.4,-1.2);
+  \node[above,text=rorange] at (4.7,-1.15) {CellToWorld};
+
+  % world
+  \begin{scope}[xshift=6.3cm,yshift=-1.2cm]
+    \draw[->,rred,line width=1.1pt] (0,0) -- (2.6,0) node[right,text=rred] {$+X$ \ (column)};
+    \draw[->,rblue,line width=1.1pt] (0,0) -- (0,-2.0) node[below,text=rblue] {$+Z$ \ (row)};
+    \draw[->,rgreen,line width=1.1pt] (0,0) -- (-0.9,0.9) node[above left,text=rgreen] {$+Y$ \ (height)};
+    \fill[rink] (0,0) circle (1.6pt);
+    \node[text=rgrey,align=left] at (2.0,-2.6) {world metres};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\keyidea{Map \textbf{column} becomes world \textbf{X}. Map \textbf{row} becomes
+world \textbf{Z}. Y is not in the map at all, because a top-down plan has no
+height in it. This one mapping is the whole relationship between a 2D level
+editor and a 3D world, and it runs backwards too --- that is how the minimap
+turns a 3D position back into a dot.}
+
+\section{Reading the map once, at startup}
+
+\lstinline|ResetGame()| walks the text and turns markers into game state:
+
+\begin{lstlisting}
+for (int row = 0; row < MAP_ROWS; row++)
+    for (int col = 0; col < MAP_COLS; col++)
+    {
+        if (MAP[row][col] == 'S')
+            g->camera.position = CellToWorld(col, row, EYE_HEIGHT);
+        else if (MAP[row][col] == 'E' && g->enemyCount < MAX_ENEMIES)
+        {
+            g->enemies[g->enemyCount].position = CellToWorld(col, row, 0.9f);
+            g->enemies[g->enemyCount].alive = true;
+            g->enemyCount++;
+        }
+    }
+\end{lstlisting}
+
+Because all the state lives in one \lstinline|Game| struct, restarting the level
+is a single call to \lstinline|ResetGame(&game)| bound to the R key. Worth
+copying as a habit: put the game state in a struct, write a reset function, and
+you get restarts for free.
+
+\section{The order of the frame}
+
+The loop is one long sequence, and the order matters:
+
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Look} --- mouse delta into yaw and pitch, pitch clamped, then
+        build \lstinline|forward|, \lstinline|right| and
+        \lstinline|flatForward| (chapter 12).
+  \item \textbf{Move} --- keys into a direction, normalized, times speed times
+        \lstinline|dt|, resolved one axis at a time against the grid
+        (chapter 13).
+  \item \textbf{Shoot} --- on click, fire a ray and see what it finds.
+  \item \textbf{Enemies} --- walk towards the player, hurt them on contact.
+  \item \textbf{Draw the world} --- inside \lstinline|BeginMode3D|.
+  \item \textbf{Draw the HUD} --- after \lstinline|EndMode3D|, in screen pixels.
+\end{enumerate}
+
+Notice that all six steps read the same \lstinline|forward| vector that step 1
+computed. Compute it once per frame, near the top, and pass it around. Computing
+it twice with different values is how you get a gun that shoots slightly to the
+left of the crosshair.
+
+\section{Walls}
+
+One cube per \lstinline|#| cell, with a shade that varies by position so the
+corridors do not look like a single flat mass:
+
+\begin{lstlisting}
+Vector3 centre = CellToWorld(col, row, WALL_HEIGHT/2);
+int shade = 88 + ((col*7 + row*13) % 26);
+DrawCube(centre, CELL, WALL_HEIGHT, CELL, wall);
+DrawCubeWires(centre, CELL, WALL_HEIGHT, CELL, (Color){ 30, 26, 24, 255 });
+\end{lstlisting}
+
+Note \lstinline|WALL_HEIGHT/2| for the Y: the cube's centre is at half its
+height, so it sits on the floor instead of sinking into it (chapter 9).
+
+Floor and ceiling are two \lstinline|DrawPlane| calls in different colours. Two
+lines, and suddenly you are indoors.
+
+\section{Shooting}
+
+\begin{lstlisting}
+Ray shot = { game.camera.position, forward };
+
+// how far is the wall in front of us?
+float wallDistance = 100.0f;
+for (float t = 0.1f; t < 60.0f; t += 0.1f)
+{
+    Vector3 p = Vector3Add(shot.position, Vector3Scale(shot.direction, t));
+    if (IsWall(p.x, p.z)) { wallDistance = t; break; }
+}
+
+// the nearest enemy closer than that wall
+int target = -1;
+float best = wallDistance;
+
+for (int i = 0; i < game.enemyCount; i++)
+{
+    if (!game.enemies[i].alive) continue;
+    RayCollision hit = GetRayCollisionBox(shot, EnemyBox(game.enemies[i].position));
+    if (hit.hit && hit.distance < best) { best = hit.distance; target = i; }
+}
+\end{lstlisting}
+
+Two things are happening. The loop marching along the ray in 10 cm steps is a
+crude \emph{raycast} against the grid --- it walks forward until it is inside a
+wall cell, and that is your line of sight. Seeding \lstinline|best| with that
+distance is what stops you shooting through walls: an enemy only counts if it is
+nearer than the wall.
+
+\gotcha{Stepping along a ray in fixed increments can step straight over a thin
+wall if the step is bigger than the wall. Ours is 10 cm against 2 m walls, so it
+is safe. Proper raycasters use a grid traversal algorithm (look up ``DDA'') that
+cannot miss, and that is the next thing to learn if you want to go further down
+this road.}
+
+\section{Enemies}
+
+The simplest AI that still feels like a game: if you can see me and I am not
+touching you, walk at you.
+
+\begin{lstlisting}
+Vector3 toPlayer = Vector3Subtract(game.camera.position, e->position);
+toPlayer.y = 0.0f;                       // ignore height: they walk, not fly
+float distance = Vector3Length(toPlayer);
+
+if (distance < 12.0f && distance > 0.9f)
+{
+    Vector3 step = Vector3Scale(Vector3Normalize(toPlayer), 1.6f*dt);
+    if (CanStandAt(e->position.x + step.x, e->position.z)) e->position.x += step.x;
+    if (CanStandAt(e->position.x, e->position.z + step.z)) e->position.z += step.z;
+}
+else if (distance <= 0.9f)
+{
+    game.health -= 25.0f*dt;             // four seconds of contact kills you
+}
+\end{lstlisting}
+
+The pattern \lstinline|normalize(target - me) * speed * dt| is how absolutely
+everything chases everything else: enemies, homing missiles, a pet following you.
+Learn it once, use it forever.
+
+Their movement is resolved per axis too --- same two lines as the player --- so
+they slide along walls instead of getting stuck in corners.
+
+\section{The HUD, or where the 2D course pays off}
+
+Everything after \lstinline|EndMode3D()| is plain screen pixels:
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Crosshair} --- four short \lstinline|DrawLine| calls with a gap
+        in the middle, centred on \lstinline|GetScreenWidth()/2|.
+  \item \textbf{The gun} --- three rectangles at the bottom of the screen, offset
+        by the same \lstinline|sinf(bobTimer)| that bobs the camera, so the
+        weapon sways with your steps. A muzzle flash is two circles drawn for
+        0.06 seconds after a shot.
+  \item \textbf{Health bar} --- a background rectangle and a second one whose
+        width is \lstinline|224.0f*health/100.0f|, turning red below 30.
+  \item \textbf{Minimap} --- the text map drawn as little squares, with the
+        player and enemies as dots. World X divided by the cell size gives the
+        map column, which gives the screen X. Chapter 9's ``the floor is XZ''
+        used in reverse.
+\end{itemize}
+
+\begin{lstlisting}
+int px = ox + (int)(game.camera.position.x/CELL*tile);
+int py = oy + (int)(game.camera.position.z/CELL*tile);
+DrawCircle(px, py, 3, SKYBLUE);
+DrawLine(px, py, px + (int)(forward.x*14), py + (int)(forward.z*14), SKYBLUE);
+\end{lstlisting}
+
+That last line is the little arrow showing which way you face: the 3D forward
+vector, with its Y thrown away, drawn as a 2D line. Three dimensions and two
+dimensions, in the same frame, sharing one number.
+
+\section{Things to change first}
+
+The point of having the source is breaking it. In rough order of fun per minute:
+
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item Redraw the map. Add a room, a dead end, a long corridor.
+  \item Change \lstinline|WALL_HEIGHT| to 8 and walk around. Then try 1.5.
+  \item Set \lstinline|fovy| to 110 and then to 40. Feel how much the lens
+        changes the game.
+  \item Give the enemies different speeds, or make them stop when they are far
+        away and only wake when they see you.
+  \item Add a pickup: a \lstinline|P| in the map, drawn as a spinning cube
+        (rotate it with \lstinline|GetTime()|), that refills ammo when you touch
+        it. Everything you need is in chapters 9 and 13.
+  \item Add jumping: a \lstinline|velocityY|, gravity subtracted every frame, and
+        the Y axis resolved like X and Z.
+\end{enumerate}

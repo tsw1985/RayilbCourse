@@ -1,0 +1,204 @@
+\chapter{The rest of rcore: saving, the window, other input}
+
+rcore is a third of the library. Chapters 2 to 5 covered the parts you need on
+day one; this is the rest, and it is mostly the plumbing a finished game needs.
+
+\section{Saving and loading}
+
+The simplest save file that works is text:
+
+\begin{lstlisting}
+// writing
+const char *text = TextFormat("score=%i\nlevel=%i\n", score, level);
+SaveFileText("savegame.txt", (char *)text);
+
+// reading
+if (FileExists("savegame.txt"))
+{
+    char *text = LoadFileText("savegame.txt");   // heap allocated
+    // ... parse it ...
+    UnloadFileText(text);                        // you must free it
+}
+\end{lstlisting}
+
+For binary data --- a struct, a level, a screenshot --- the pair is
+\lstinline|SaveFileData| / \lstinline|LoadFileData|, and the loader hands you the
+size:
+
+\begin{lstlisting}
+int size = 0;
+unsigned char *data = LoadFileData("level.bin", &size);
+UnloadFileData(data);
+\end{lstlisting}
+
+\gotcha{Every \lstinline|Load...| in this family allocates. Every one has a
+matching \lstinline|Unload...|. This is the same discipline as textures, and it
+is easier to forget here because nothing appears on screen to remind you.}
+
+\section{Paths, and the one that actually matters}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|GetWorkingDirectory()| & where the program was \emph{launched} from \\
+\lstinline|GetApplicationDirectory()| & where the executable \emph{sits} \\
+\lstinline|ChangeDirectory(path)| & move the working directory \\
+\lstinline|GetFileName(path)| & \lstinline|"boss.png"| \\
+\lstinline|GetFileNameWithoutExt(path)| & \lstinline|"boss"| \\
+\lstinline|GetFileExtension(path)| & \lstinline|".png"| \\
+\lstinline|GetDirectoryPath(path)| & the folder part \\
+\lstinline|IsFileExtension(path, ".png")| & \\
+\lstinline|FileExists / DirectoryExists| & \\
+\lstinline|GetFileLength(path)| & size in bytes \\
+\lstinline|LoadDirectoryFiles(path)| & list a folder \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Most of those only parse the string and never touch the disk, so they are safe to
+call freely.
+
+The distinction between the two directory functions is the source of the classic
+``it works in my IDE but not when I double-click it'' bug. Relative paths resolve
+against the \emph{working} directory, which is not necessarily where your game
+lives. The fix is one line at startup:
+
+\begin{lstlisting}
+ChangeDirectory(GetApplicationDirectory());
+\end{lstlisting}
+
+or this project's helper, \lstinline|SearchAndSetResourceDir("resources")|.
+
+\section{Dropped files}
+
+\begin{lstlisting}
+if (IsFileDropped())
+{
+    FilePathList dropped = LoadDroppedFiles();
+
+    for (unsigned int i = 0; i < dropped.count; i++)
+        TraceLog(LOG_INFO, "dropped: %s", dropped.paths[i]);
+
+    UnloadDroppedFiles(dropped);      // always, or you leak
+}
+\end{lstlisting}
+
+Twenty lines and your level editor can open files by drag and drop. It is the
+cheapest tooling win in the library.
+
+\section{Random numbers}
+
+\begin{lstlisting}
+SetRandomSeed(1234);                       // makes a run repeatable
+int roll = GetRandomValue(1, 6);           // inclusive at both ends
+
+int *deck = LoadRandomSequence(52, 1, 52); // shuffled, NO repeats
+UnloadRandomSequence(deck);
+\end{lstlisting}
+
+\lstinline|LoadRandomSequence| is the one people reimplement badly. Any time you
+need ``pick these in a random order without repeating'' --- cards, spawn points,
+a shuffled playlist --- it is already there.
+
+Seeding deliberately is worth the habit: a fixed seed makes a bug reproducible,
+and it is how ``daily challenge'' levels work.
+
+\section{Logging}
+
+\begin{lstlisting}
+TraceLog(LOG_INFO,    "level %i loaded", level);
+TraceLog(LOG_WARNING, "texture missing, using placeholder");
+TraceLog(LOG_ERROR,   "save failed");
+
+SetTraceLogLevel(LOG_WARNING);    // quieten raylib's own chatter
+\end{lstlisting}
+
+raylib logs a lot at \lstinline|LOG_INFO|, which is genuinely useful while
+learning --- it is how you confirm a shader compiled or a texture loaded. Turn it
+down to \lstinline|LOG_WARNING| for a release.
+
+\section{Managing the window at run time}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|ToggleFullscreen()| & a real mode switch; can be slow \\
+\lstinline|ToggleBorderlessWindowed()| & fake fullscreen; instant, usually preferred \\
+\lstinline|MaximizeWindow() / RestoreWindow()| & needs \lstinline|FLAG_WINDOW_RESIZABLE| \\
+\lstinline|SetWindowSize(w, h) / SetWindowPosition(x, y)| & \\
+\lstinline|SetWindowTitle(text)| & \\
+\lstinline|SetWindowIcon(image)| & \\
+\lstinline|IsWindowResized()| & true for the one frame it changed \\
+\lstinline|IsWindowFocused()| & pause the game when it goes false \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+And the monitor functions, for an options menu that offers real resolutions:
+
+\begin{lstlisting}
+int m = GetCurrentMonitor();
+GetMonitorName(m);  GetMonitorWidth(m);  GetMonitorHeight(m);  GetMonitorRefreshRate(m);
+\end{lstlisting}
+
+\gotcha{\lstinline|GetScreenWidth()| is the window in logical units;
+\lstinline|GetRenderWidth()| is the actual framebuffer in pixels. On a HighDPI
+display they differ by a factor of two, and mixing them puts your HUD in the
+wrong place on exactly the machines you do not own.}
+
+\section{Gamepads}
+
+\begin{lstlisting}
+if (IsGamepadAvailable(0))
+{
+    float x = GetGamepadAxisMovement(0, GAMEPAD_AXIS_LEFT_X);   // -1 .. +1
+    if (IsGamepadButtonPressed(0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN)) Jump();
+}
+\end{lstlisting}
+
+The button names are described by position, not by letter, because A on an Xbox
+pad is B on a Nintendo one: \lstinline|RIGHT_FACE_DOWN| is the bottom button of
+the right cluster whatever the pad calls it.
+
+\gotcha{Sticks never read exactly zero when released. Always apply a dead zone:
+
+\lstinline|if (fabsf(x) < 0.15f) x = 0.0f;|
+
+Without it your character drifts slowly across the room while nobody is touching
+anything.}
+
+\section{Touch and gestures}
+
+\begin{lstlisting}
+int count = GetTouchPointCount();
+Vector2 p = GetTouchPosition(0);
+
+int g = GetGestureDetected();     // GESTURE_TAP, GESTURE_SWIPE_LEFT, GESTURE_PINCH_OUT...
+\end{lstlisting}
+
+On a desktop the mouse counts as one touch point, so tap, hold, drag and swipe
+all work without a touchscreen --- which means you can develop and test the mobile
+controls of a game on your laptop.
+
+\section{Clipboard and compression}
+
+\begin{lstlisting}
+SetClipboardText("share this");
+const char *text = GetClipboardText();
+
+unsigned char *packed = CompressData(raw, rawSize, &packedSize);
+unsigned char *back   = DecompressData(packed, packedSize, &rawSize);
+char *b64 = EncodeDataBase64(raw, rawSize, &outSize);
+\end{lstlisting}
+
+Compression plus base64 is how you make a save file or a level that a player can
+copy and paste to a friend as a block of text.
+
+\gotcha{These return raylib-allocated memory. Free it with
+\lstinline|MemFree()|, not \lstinline|free()| --- raylib can be built with a
+custom allocator, and mixing them crashes only on some builds.}
+
+\tryit{Module 4 writes and reads a real save file, lists the path helpers with
+their output, shuffles a deck, compresses a buffer and copies to your clipboard.
+Module 1 covers the window and monitor side, and module 2 the input
+devices.}{./cheatsheet/build.sh 4 \quad 1 \quad 2}

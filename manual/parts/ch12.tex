@@ -1,0 +1,156 @@
+\chapter{Your own first person camera}
+
+This is the chapter people brace themselves for, and it is smaller than it looks.
+There are two angles and one formula, and then you are done.
+
+\section{The two angles}
+
+\begin{center}
+\begin{tikzpicture}[scale=1.15,every node/.style={font=\sffamily\footnotesize}]
+  \fill[rlight,rounded corners=3pt] (-2.4,-2.3) rectangle (3.2,2.3);
+
+  % ground circle (top view of yaw)
+  \draw[codeframe,fill=white] (0,0) circle (1.7);
+  \draw[->,rred,line width=1pt] (0,0) -- (1.7,0) node[right,text=rred] {$+X$};
+  \draw[->,rblue,line width=1pt] (0,0) -- (0,-1.7) node[below,text=rblue] {$+Z$};
+
+  \draw[->,rink,line width=1.3pt] (0,0) -- (30:1.7) node[above right,text=rink] {forward};
+  \draw[rorange,line width=1pt] (0.75,0) arc (0:30:0.75);
+  \node[text=rorange] at (0.95,0.2) {yaw};
+
+  \node[align=left,text=rgrey] at (0,2.0) {seen from above: \textbf{yaw} turns you around Y};
+  \node[align=left,text=rgrey] at (0,-2.05) {\textbf{pitch} tilts you up and down (not shown)};
+\end{tikzpicture}
+\end{center}
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{yaw} --- the horizontal turn, spinning around the Y axis. Looking
+        left and right.
+  \item \textbf{pitch} --- the vertical tilt, around the X axis. Looking up and
+        down.
+\end{itemize}
+
+There is a third, \emph{roll}, which tilts your head sideways. First person games
+almost never use it, so we will not either.
+
+Both are stored in \textbf{radians}, because that is what C's \lstinline|sinf|
+and \lstinline|cosf| want. A full turn is $2\pi$. Convert for display with
+raylib's \lstinline|RAD2DEG| and \lstinline|DEG2RAD| constants.
+
+\section{From angles to a direction}
+
+\begin{lstlisting}
+Vector3 forward = {
+    cosf(pitch)*cosf(yaw),
+    sinf(pitch),
+    cosf(pitch)*sinf(yaw)
+};
+\end{lstlisting}
+
+If trigonometry is a distant memory, here is the intuition and you can leave it
+at that. Ignore pitch for a second: on the flat ground, \lstinline|cos(yaw)| and
+\lstinline|sin(yaw)| trace a circle of radius 1 as yaw goes round. That is the
+direction you are facing, on the floor.
+
+Now add pitch. \lstinline|sin(pitch)| is how much you are looking up, and it goes
+straight into Y. \lstinline|cos(pitch)| shrinks the flat part: look straight up
+and nothing is left of the horizontal direction, which is exactly right.
+
+Starting value: \lstinline|yaw = -PI/2| points you along $-Z$, which is
+conventionally ``into the screen''. \lstinline|pitch = 0| is the horizon.
+
+\section{From a direction to sideways}
+
+To strafe you need the direction to your right. That is the \textbf{cross
+product} of where you are looking and where up is:
+
+\begin{lstlisting}
+Vector3 right = Vector3Normalize(
+    Vector3CrossProduct(forward, (Vector3){ 0.0f, 1.0f, 0.0f }));
+\end{lstlisting}
+
+All you need to know about the cross product: give it two directions and it hands
+back a third one perpendicular to both. Forward and up are perpendicular-ish, and
+the thing perpendicular to both of them is sideways. That is the entire reason it
+appears in every camera in existence.
+
+\section{Moving}
+
+\begin{lstlisting}
+Vector3 flatForward = Vector3Normalize((Vector3){ forward.x, 0.0f, forward.z });
+
+Vector3 move = { 0 };
+if (IsKeyDown(KEY_W)) move = Vector3Add(move, flatForward);
+if (IsKeyDown(KEY_S)) move = Vector3Subtract(move, flatForward);
+if (IsKeyDown(KEY_D)) move = Vector3Add(move, right);
+if (IsKeyDown(KEY_A)) move = Vector3Subtract(move, right);
+
+if (Vector3Length(move) > 0.0f) move = Vector3Normalize(move);
+
+camera.position = Vector3Add(camera.position, Vector3Scale(move, speed*dt));
+camera.target   = Vector3Add(camera.position, forward);
+\end{lstlisting}
+
+That last line is the one that ties it all together: the camera looks at a point
+one unit in front of the eye, in the direction we computed. Forget it and the
+camera moves but never turns.
+
+\section{The four details that make or break the feel}
+
+\begin{enumerate}[leftmargin=*,itemsep=5pt]
+  \item \textbf{Flatten the forward vector for walking.} Notice
+        \lstinline|flatForward| above: the Y component is thrown away and the
+        result renormalized. Without it, looking at the sky and pressing W makes
+        you fly.
+
+  \item \textbf{Clamp the pitch} to just under 90 degrees:
+\begin{lstlisting}
+if (pitch >  1.55f) pitch =  1.55f;     // about 89 degrees
+if (pitch < -1.55f) pitch = -1.55f;
+\end{lstlisting}
+        At exactly 90, \lstinline|forward| is parallel to \lstinline|up|, the
+        cross product collapses to zero, \lstinline|right| becomes undefined and
+        the camera snaps violently. This is \emph{gimbal lock}, it is famous, and
+        one \lstinline|if| avoids it.
+
+  \item \textbf{Normalize the movement vector.} Hold W and D together without it
+        and the two unit vectors add up to a length of $\sqrt{2}$: you move 41\%
+        faster diagonally. Players find that exploit within a minute.
+
+  \item \textbf{Multiply by \lstinline|dt|.} As always.
+\end{enumerate}
+
+\section{Reading the mouse}
+
+\begin{lstlisting}
+DisableCursor();                       // once, at startup
+
+Vector2 mouse = GetMouseDelta();
+yaw   += mouse.x*0.003f;
+pitch -= mouse.y*0.003f;               // note the MINUS
+\end{lstlisting}
+
+Pitch subtracts because screen Y grows downwards while looking up is positive
+pitch --- the 2D and 3D Y axes disagreeing one final time. Flip that sign and you
+have inverted mouse look, which some people actually prefer, so make it an
+option rather than a bug.
+
+The \lstinline|0.003f| is mouse sensitivity, in radians per pixel. Expose it as a
+setting; everybody wants a different one.
+
+\section{The finishing touch: head bob}
+
+Pure decoration, three lines, and it is most of what makes movement feel
+physical:
+
+\begin{lstlisting}
+if (walking) bobTimer += dt*speed*1.6f;
+float bob = walking ? sinf(bobTimer)*0.045f : 0.0f;
+camera.position.y = EYE_HEIGHT + bob;
+\end{lstlisting}
+
+A sine wave on the eye height, running faster when you run. Keep the amplitude
+tiny --- 4 centimetres is plenty. Anything bigger and players feel seasick.
+
+\tryit{Lesson 4 of the 3D course is this chapter as a running program, printing
+yaw, pitch and the forward vector live so you can watch the numbers as you turn.}{./course3d/build.sh 4}

@@ -1,0 +1,302 @@
+\chapter{Cheat sheet}
+
+\section{The skeleton}
+
+\begin{lstlisting}
+#include "raylib.h"
+#include "raymath.h"                   // only if you need vector maths
+
+int main(void)
+{
+    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
+    InitWindow(800, 450, "title");
+    SetTargetFPS(60);
+
+    // load textures, sounds, models here
+
+    while (!WindowShouldClose())
+    {
+        float dt = GetFrameTime();
+
+        // update
+
+        BeginDrawing();
+            ClearBackground(RAYWHITE);
+            BeginMode3D(camera);
+                // world
+            EndMode3D();
+            // HUD
+        EndDrawing();
+    }
+
+    // unload everything here
+    CloseWindow();
+    return 0;
+}
+\end{lstlisting}
+
+\section{Window and timing}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|InitWindow(w, h, title)| & creates window + OpenGL context \\
+\lstinline|CloseWindow()| & destroys it \\
+\lstinline|WindowShouldClose()| & true on ESC or the close button \\
+\lstinline|SetConfigFlags(flags)| & \textbf{before} InitWindow \\
+\lstinline|SetTargetFPS(60)| & cap the loop \\
+\lstinline|GetFrameTime()| & delta time, in seconds \\
+\lstinline|GetTime()| & seconds since InitWindow \\
+\lstinline|GetFPS()| & current frame rate \\
+\lstinline|GetScreenWidth() / Height()| & current window size \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Drawing state}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|BeginDrawing() / EndDrawing()| & wraps the whole frame \\
+\lstinline|ClearBackground(colour)| & wipe last frame \\
+\lstinline|BeginMode2D(cam2d) / EndMode2D()| & 2D world coordinates \\
+\lstinline|BeginMode3D(cam3d) / EndMode3D()| & 3D world coordinates + depth \\
+\lstinline|BeginTextureMode(rt) / EndTextureMode()| & draw into an offscreen image \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{2D drawing}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|DrawRectangle(x, y, w, h, c)| & x,y is the top-left corner \\
+\lstinline|DrawRectangleRec(rec, c)| & takes a Rectangle \\
+\lstinline|DrawRectangleLinesEx(rec, thick, c)| & outline \\
+\lstinline|DrawCircle(cx, cy, r, c)| & cx,cy is the centre \\
+\lstinline|DrawLine(x1, y1, x2, y2, c)| & thin line \\
+\lstinline|DrawLineEx(v1, v2, thick, c)| & thick line \\
+\lstinline|DrawTriangle(v1, v2, v3, c)| & counter-clockwise! \\
+\lstinline|DrawText(txt, x, y, size, c)| & default font \\
+\lstinline|MeasureText(txt, size)| & width in pixels, for centring \\
+\lstinline|TextFormat("%i", n)| & sprintf that manages its buffer \\
+\lstinline|DrawFPS(x, y)| & debug frame rate \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{3D drawing}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|DrawCube(centre, w, h, l, c)| & sizes are X, Y, Z \\
+\lstinline|DrawCubeV(centre, size, c)| & size as a Vector3 \\
+\lstinline|DrawCubeWires(centre, w, h, l, c)| & edges only \\
+\lstinline|DrawSphere(centre, r, c)| & \\
+\lstinline|DrawCylinder(bottom, rTop, rBot, h, sides, c)| & rTop = 0 gives a cone \\
+\lstinline|DrawPlane(centre, size2, c)| & flat on XZ \\
+\lstinline|DrawLine3D(a, b, c)| & \\
+\lstinline|DrawGrid(slices, spacing)| & XZ floor grid at Y = 0 \\
+\lstinline|DrawBillboard(cam, tex, pos, size, c)| & always faces the camera \\
+\lstinline|DrawModel(model, pos, scale, tint)| & loaded meshes \\
+\lstinline|DrawBoundingBox(box, c)| & collision debugging \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Input}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|IsKeyDown(KEY_W)| & every frame while held \\
+\lstinline|IsKeyPressed(KEY_SPACE)| & one frame, on the way down \\
+\lstinline|IsKeyReleased(KEY_SPACE)| & one frame, on the way up \\
+\lstinline|IsMouseButtonPressed(MOUSE_BUTTON_LEFT)| & \\
+\lstinline|GetMousePosition()| & screen pixels \\
+\lstinline|GetMouseDelta()| & movement this frame; for FPS cameras \\
+\lstinline|GetMouseWheelMove()| & \\
+\lstinline|DisableCursor() / EnableCursor()| & capture and release the pointer \\
+\lstinline|SetExitKey(KEY_NULL)| & stop ESC from closing the window \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Cameras}
+
+\begin{lstlisting}
+Camera2D cam2 = { 0 };
+cam2.target = player;                                 // world point
+cam2.offset = (Vector2){ w/2.0f, h/2.0f };            // where it lands on screen
+cam2.zoom   = 1.0f;                                   // NEVER leave this at 0
+
+Camera3D cam3 = { 0 };
+cam3.position   = (Vector3){ 0, 1.7f, 6 };
+cam3.target     = (Vector3){ 0, 1.7f, 0 };
+cam3.up         = (Vector3){ 0, 1, 0 };
+cam3.fovy       = 70.0f;
+cam3.projection = CAMERA_PERSPECTIVE;
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|UpdateCamera(&cam, CAMERA_FREE)| & built-in fly-around \\
+\lstinline|UpdateCamera(&cam, CAMERA_ORBITAL)| & spins around the target \\
+\lstinline|UpdateCamera(&cam, CAMERA_FIRST_PERSON)| & needs DisableCursor() \\
+\lstinline|GetWorldToScreen(point3d, cam)| & 3D point to screen pixels \\
+\lstinline|GetScreenToWorld2D(mouse, cam2)| & mouse to 2D world \\
+\lstinline|GetScreenToWorldRay(mouse, cam3)| & mouse to a 3D ray, for picking \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Collisions}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|CheckCollisionRecs(a, b)| & 2D box vs box \\
+\lstinline|CheckCollisionCircles(ca, ra, cb, rb)| & 2D circle vs circle \\
+\lstinline|CheckCollisionPointRec(point, rec)| & mouse over a button \\
+\lstinline|CheckCollisionBoxes(a, b)| & 3D AABB vs AABB \\
+\lstinline|CheckCollisionBoxSphere(box, centre, r)| & \\
+\lstinline|GetRayCollisionBox(ray, box)| & shooting and picking \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{raymath, the useful half}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|Vector3Add(a, b)| & a + b \\
+\lstinline|Vector3Subtract(a, b)| & the vector from b to a \\
+\lstinline|Vector3Scale(v, f)| & stretch \\
+\lstinline|Vector3Length(v)| & magnitude \\
+\lstinline|Vector3Normalize(v)| & direction only, length 1 \\
+\lstinline|Vector3Distance(a, b)| & \\
+\lstinline|Vector3CrossProduct(a, b)| & perpendicular to both \\
+\lstinline|Vector3Lerp(a, b, t)| & blend between two points \\
+\lstinline|DEG2RAD, RAD2DEG| & angle conversion constants \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Audio}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|InitAudioDevice() / CloseAudioDevice()| & before anything else in raudio \\
+\lstinline|LoadSound(file) / PlaySound(snd)| & short clips \\
+\lstinline|SetSoundPitch(snd, 1.2f)| & 1.0 unchanged; vary it per shot \\
+\lstinline|SetSoundPan(snd, 0.5f)| & 0 left, 1 right \\
+\lstinline|LoadSoundAlias(snd)| & second playback state, shared samples \\
+\lstinline|LoadMusicStream(file)| & long tracks \\
+\lstinline|UpdateMusicStream(music)| & \textbf{every frame, or it stops} \\
+\lstinline|LoadSoundFromWave(wave)| & from samples you built \\
+\lstinline|ExportWave(wave, "out.wav")| & write it to disk \\
+\lstinline|LoadAudioStream(rate, bits, ch)| & samples you push yourself \\
+\lstinline|SetMasterVolume(0.6f)| & everything at once \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Shaders}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|LoadShader(vsFile, fsFile)| & NULL means "use raylib's default" \\
+\lstinline|LoadShaderFromMemory(vs, fs)| & source as strings \\
+\lstinline|GetShaderLocation(shader, "uTime")| & once; returns $-1$ if not found \\
+\lstinline|SetShaderValue(sh, loc, &v, TYPE)| & every frame \\
+\lstinline|BeginShaderMode(sh) / EndShaderMode()| & \\
+\lstinline|UnloadShader(sh)| & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+GLSL names raylib fills in for you: \lstinline|texture0|, \lstinline|colDiffuse|,
+\lstinline|fragTexCoord|, \lstinline|fragColor|, and you must write
+\lstinline|finalColor|.
+
+\section{Meshes, models and materials}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|GenMeshCube / Sphere / Plane / Cylinder| & generated geometry \\
+\lstinline|GenMeshHeightmap(image, size)| & terrain from a greyscale image \\
+\lstinline|GenMeshCubicmap(image, size)| & a maze from a pixel map \\
+\lstinline|LoadModelFromMesh(mesh)| & wrap it with a default material \\
+\lstinline|model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture| & put a texture on it \\
+\lstinline|DrawModel / DrawModelEx / DrawModelWires| & \\
+\lstinline|DrawMeshInstanced(mesh, mat, transforms, n)| & thousands in one call \\
+\lstinline|LoadModelAnimations(file, &count)| & \\
+\lstinline|UpdateModelAnimation(model, anim, frame)| & \\
+\lstinline|GetMeshBoundingBox(mesh)| & for collisions \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Images and render textures}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|GenImageColor / GradientLinear / GradientRadial| & \\
+\lstinline|GenImageChecked / WhiteNoise / PerlinNoise| & \\
+\lstinline|ImageResize / Crop / Flip / Rotate| & all take \lstinline|Image *| \\
+\lstinline|ImageColorTint / Brightness / Contrast| & \\
+\lstinline|ImageDrawRectangle / Circle / Text| & draw into the image \\
+\lstinline|LoadRenderTexture(w, h)| & a texture you draw into \\
+\lstinline|BeginTextureMode(rt) / EndTextureMode()| & before \lstinline|BeginDrawing| \\
+\lstinline|SetTextureFilter(tex, TEXTURE_FILTER_POINT)| & crisp pixel art \\
+\lstinline|GenTextureMipmaps(&tex)| & stops distant textures shimmering \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Remember the negative source height when drawing a render texture.
+
+\section{Files, saving and random}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|SaveFileText / LoadFileText / UnloadFileText| & text saves \\
+\lstinline|SaveFileData / LoadFileData / UnloadFileData| & binary saves \\
+\lstinline|FileExists / DirectoryExists / GetFileLength| & \\
+\lstinline|GetFileName / GetFileExtension / GetDirectoryPath| & string work only \\
+\lstinline|GetApplicationDirectory() / ChangeDirectory()| & fix relative paths \\
+\lstinline|IsFileDropped() / LoadDroppedFiles()| & drag and drop \\
+\lstinline|SetRandomSeed / GetRandomValue(min, max)| & inclusive \\
+\lstinline|LoadRandomSequence(n, min, max)| & shuffled, no repeats \\
+\lstinline|TraceLog(LOG_INFO, "x = %f", x)| & print to the terminal \\
+\lstinline|MemAlloc / MemFree| & raylib's allocator; use it for raylib data \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Loading and unloading}
+
+Always outside the loop. Always in pairs.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|LoadTexture(file)| & \lstinline|UnloadTexture(tex)| \\
+\lstinline|LoadImage(file)| & \lstinline|UnloadImage(img)| \\
+\lstinline|LoadTextureFromImage(img)| & \lstinline|UnloadTexture(tex)| \\
+\lstinline|LoadFont(file)| & \lstinline|UnloadFont(font)| \\
+\lstinline|LoadModel(file)| & \lstinline|UnloadModel(model)| \\
+\lstinline|LoadSound(file)| & \lstinline|UnloadSound(snd)| \\
+\bottomrule
+\end{tabular}
+\end{center}

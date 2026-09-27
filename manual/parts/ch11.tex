@@ -1,0 +1,147 @@
+\chapter{Drawing 3D objects}
+
+\section{The shapes that come in the box}
+
+raylib has no 3D modelling tools, but it has enough primitives to build a whole
+game out of, and every one of them is a single call:
+
+\begin{lstlisting}
+DrawCube(centre, width, height, length, colour);     // sizes are X, Y, Z
+DrawCubeV(centre, size, colour);                     // same, size as Vector3
+DrawCubeWires(centre, w, h, l, colour);              // just the edges
+DrawSphere(centre, radius, colour);
+DrawCylinder(bottomCentre, radiusTop, radiusBottom, height, sides, colour);
+DrawPlane(centre, size2D, colour);                   // a flat XZ quad
+DrawLine3D(from, to, colour);
+DrawGrid(slices, spacing);                           // the XZ floor grid
+\end{lstlisting}
+
+A few things worth knowing before you use them:
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item \lstinline|DrawCube| takes the \textbf{centre}, like
+        \lstinline|DrawCircle| did in 2D and unlike \lstinline|DrawRectangle|.
+  \item \lstinline|DrawCylinder| takes the \textbf{bottom} centre, not the middle.
+        Give it a top radius of 0 and you have a cone.
+  \item \lstinline|DrawPlane| is always flat on the XZ plane. It takes a
+        \lstinline|Vector2| size because a flat thing only has two dimensions.
+  \item \lstinline|DrawGrid| is centred on the origin, so a grid over a level
+        that starts at 0 and grows positive will only cover a quarter of it.
+\end{itemize}
+
+\section{Why everything looks flat}
+
+The first 3D scene anybody draws looks like coloured paper cut-outs. Every face
+of the cube is exactly the same shade, so the shape reads as a hexagon rather
+than a box.
+
+That is not a bug. Plain \lstinline|DrawCube| does no lighting at all --- there
+is no light in the scene, so every surface just gets its flat colour. Real
+lighting means shaders, which is a much later chapter of your life.
+
+Three cheap tricks get you 90\% of the way, and the lessons use all three:
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Draw the wireframe on top.} A cube plus its dark edges reads as a
+        solid object immediately:
+\begin{lstlisting}
+DrawCube(p, 2, 2, 2, MAROON);
+DrawCubeWires(p, 2, 2, 2, (Color){ 30, 26, 24, 255 });
+\end{lstlisting}
+
+  \item \textbf{Vary the colour per object.} Identical walls merge into one mass;
+        a little variation separates them. The mini Doom shades each wall cell
+        from its grid coordinates:
+\begin{lstlisting}
+int shade = 88 + ((col*7 + row*13) % 26);
+\end{lstlisting}
+
+  \item \textbf{Make the floor and ceiling different.} Two
+        \lstinline|DrawPlane| calls in different colours do more for the sense of
+        being inside a room than any amount of geometry.
+\end{enumerate}
+
+\section{A fake shadow}
+
+Nothing tells you where an object is in 3D like a shadow, and a convincing one
+costs one line: a very flat dark cube on the floor, directly under the object.
+
+\begin{lstlisting}
+DrawCube((Vector3){ obj.x, 0.01f, obj.z }, 1.0f, 0.02f, 1.0f, Fade(BLACK, 0.5f));
+\end{lstlisting}
+
+The \lstinline|0.01f| lifts it a hair above the floor. Put it at exactly
+\lstinline|0| and it fights with the floor plane for the same pixels, which
+produces a horrible flickering called \emph{z-fighting}. Whenever two surfaces
+occupy the same plane and shimmer, nudge one of them.
+
+\section{Making something face the player}
+
+Enemies in early first person games were flat images that always turned to face
+you. raylib does that with billboards:
+
+\begin{lstlisting}
+DrawBillboard(camera, texture, position, size, WHITE);
+\end{lstlisting}
+
+If you have no texture, you can still get the effect with geometry. Work out the
+direction from the object to the camera, and place details along it --- this is
+the trick the mini Doom uses to give its enemies eyes that follow you:
+
+\begin{lstlisting}
+Vector3 toPlayer = Vector3Normalize(Vector3Subtract(camera.position, e->position));
+Vector3 side = Vector3Normalize(Vector3CrossProduct(toPlayer, (Vector3){ 0, 1, 0 }));
+Vector3 base = Vector3Add(e->position, Vector3Scale(toPlayer, 0.22f));
+DrawSphere(Vector3Add(base, Vector3Scale(side,  0.10f)), 0.055f, YELLOW);
+DrawSphere(Vector3Add(base, Vector3Scale(side, -0.10f)), 0.055f, YELLOW);
+\end{lstlisting}
+
+That is the first time we have used the cross product for something practical.
+Chapter 12 explains it properly; for now, read it as ``give me the direction
+perpendicular to these two''.
+
+\section{Models, when you outgrow cubes}
+
+\begin{lstlisting}
+Model model = LoadModel("robot.glb");        // once, outside the loop
+DrawModel(model, position, scale, WHITE);    // every frame
+DrawModelEx(model, position, rotAxis, rotAngle, scaleV, WHITE);
+UnloadModel(model);                          // once, after the loop
+\end{lstlisting}
+
+Same load-outside-unload-after rule as textures. raylib reads \file{.obj},
+\file{.gltf}, \file{.glb}, \file{.iqm} and \file{.vox}, and \file{.glb} is the
+one to prefer because it packs the mesh, the materials and the textures into a
+single file.
+
+\section{The maths helpers}
+
+Vector maths lives in a separate header you have to include yourself:
+
+\begin{lstlisting}
+#include "raymath.h"
+\end{lstlisting}
+
+The handful you will actually use:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Function} & \textbf{What it gives you} \\
+\midrule
+\lstinline|Vector3Add(a, b)| & a + b \\
+\lstinline|Vector3Subtract(a, b)| & a $-$ b: the vector from b to a \\
+\lstinline|Vector3Scale(v, f)| & v stretched by f \\
+\lstinline|Vector3Length(v)| & how long it is \\
+\lstinline|Vector3Normalize(v)| & same direction, length exactly 1 \\
+\lstinline|Vector3Distance(a, b)| & distance between two points \\
+\lstinline|Vector3CrossProduct(a, b)| & a direction perpendicular to both \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\keyidea{\lstinline|Vector3Normalize| is the one to understand. A normalized
+vector has length 1, so it carries a \emph{direction} and nothing else. Multiply
+it by a speed and you get a velocity; multiply it by a distance and you get an
+offset. Almost every movement line in the next chapters is
+\lstinline|normalize(something) * speed * dt|.}

@@ -1,0 +1,230 @@
+% =============================================================================
+%  raylib from Zero - a hands-on manual
+%  Build with:  pdflatex raylib-manual.tex   (run it twice for the TOC)
+% =============================================================================
+\documentclass[11pt,a4paper,openany]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,top=2.4cm,bottom=2.4cm,left=2.6cm,right=2.6cm,headheight=22pt]{geometry}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{mdframed}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{fancyhdr}
+\usepackage{tikz}
+\usepackage{caption}
+\usepackage[hidelinks]{hyperref}
+
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric}
+
+% ---- palette ---------------------------------------------------------------
+\definecolor{rlink}{HTML}{1B6AC9}
+\definecolor{rink}{HTML}{1F2430}
+\definecolor{rgrey}{HTML}{6B7280}
+\definecolor{rlight}{HTML}{F4F5F7}
+\definecolor{rred}{HTML}{C0392B}
+\definecolor{rgreen}{HTML}{2E7D32}
+\definecolor{rblue}{HTML}{1565C0}
+\definecolor{rorange}{HTML}{E07B00}
+\definecolor{rpurple}{HTML}{6A3D9A}
+\definecolor{codebg}{HTML}{F7F7F4}
+\definecolor{codeframe}{HTML}{DDDDD6}
+\definecolor{cmtcol}{HTML}{6C8A56}
+\definecolor{kwcol}{HTML}{9C27B0}
+\definecolor{strcol}{HTML}{B85C00}
+\definecolor{numcol}{HTML}{B0B0A8}
+
+\hypersetup{colorlinks=true,linkcolor=rlink,urlcolor=rlink,
+            pdftitle={raylib from Zero},pdfauthor={}}
+
+% ---- headings --------------------------------------------------------------
+\titleformat{\chapter}[display]
+  {\sffamily\bfseries}
+  {\normalsize\color{rgrey}\MakeUppercase{\chaptertitlename}\ \thechapter}
+  {6pt}
+  {\color{rink}\Huge}
+  [\vspace{2pt}{\color{rorange}\rule{\textwidth}{1.2pt}}]
+\titlespacing*{\chapter}{0pt}{-14pt}{22pt}
+
+\titleformat{\section}{\sffamily\large\bfseries\color{rink}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\sffamily\normalsize\bfseries\color{rink}}{\thesubsection}{0.7em}{}
+\titlespacing*{\section}{0pt}{16pt}{6pt}
+\titlespacing*{\subsection}{0pt}{12pt}{4pt}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2.5pt minus 1.5pt}
+\widowpenalty=600
+\clubpenalty=600
+\raggedbottom
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\sffamily\footnotesize\color{rgrey}\leftmark}
+\fancyhead[R]{\sffamily\footnotesize\color{rgrey}\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{codeframe}\leaders\hrule height \headrulewidth\hfill}}
+\renewcommand{\chaptermark}[1]{\markboth{\thechapter.\ #1}{}}
+
+% ---- code ------------------------------------------------------------------
+\lstdefinestyle{c}{
+  language=C,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{kwcol}\bfseries,
+  commentstyle=\color{cmtcol}\itshape,
+  stringstyle=\color{strcol},
+  numberstyle=\ttfamily\tiny\color{numcol},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  framesep=7pt,
+  xleftmargin=10pt,
+  xrightmargin=2pt,
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  tabsize=4,
+  morekeywords={Vector2,Vector3,Color,Rectangle,Camera2D,Camera3D,Camera,
+                BoundingBox,Texture2D,Texture,Image,Ray,RayCollision,Model,
+                Font,bool,true,false,Sound,Music}
+}
+\lstset{style=c}
+
+\lstdefinestyle{plain}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  framesep=7pt,
+  xleftmargin=10pt,
+  breaklines=true,
+  keywordstyle={},
+  commentstyle={},
+  columns=fullflexible,
+  keepspaces=true
+}
+
+% ---- callout boxes ---------------------------------------------------------
+\newmdenv[
+  linewidth=0pt,
+  backgroundcolor=rlight,
+  leftline=true,linecolor=rorange,linewidth=3pt,
+  innerleftmargin=10pt,innerrightmargin=10pt,
+  innertopmargin=8pt,innerbottommargin=8pt,
+  skipabove=10pt,skipbelow=10pt,
+  nobreak=true
+]{gotchabox}
+
+\newmdenv[
+  linewidth=0pt,
+  backgroundcolor=rlight,
+  leftline=true,linecolor=rblue,linewidth=3pt,
+  innerleftmargin=10pt,innerrightmargin=10pt,
+  innertopmargin=8pt,innerbottommargin=8pt,
+  skipabove=10pt,skipbelow=10pt,
+  nobreak=true
+]{keybox}
+
+\newmdenv[
+  linewidth=0pt,
+  backgroundcolor=rlight,
+  leftline=true,linecolor=rgreen,linewidth=3pt,
+  innerleftmargin=10pt,innerrightmargin=10pt,
+  innertopmargin=8pt,innerbottommargin=8pt,
+  skipabove=10pt,skipbelow=10pt,
+  nobreak=true
+]{trybox}
+
+\newcommand{\boxtitle}[2]{{\sffamily\bfseries\small\color{#1}#2}\par\vspace{2pt}}
+\newcommand{\gotcha}[1]{\begin{gotchabox}\boxtitle{rorange}{WATCH OUT}#1\end{gotchabox}}
+\newcommand{\keyidea}[1]{\begin{keybox}\boxtitle{rblue}{THE KEY IDEA}#1\end{keybox}}
+\newcommand{\tryit}[2]{\begin{trybox}\boxtitle{rgreen}{RUN IT}#1\par\vspace{3pt}{\ttfamily\small #2}\end{trybox}}
+
+\newcommand{\file}[1]{{\ttfamily\small #1}}
+
+% =============================================================================
+\begin{document}
+
+% ---- title page ------------------------------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{2.2cm}
+
+{\sffamily\bfseries\fontsize{46}{52}\selectfont\color{rink} raylib\par}
+\vspace{4pt}
+{\sffamily\fontsize{46}{52}\selectfont\color{rorange} from Zero\par}
+
+\vspace{1.0cm}
+{\color{rorange}\rule{0.62\textwidth}{1.4pt}\par}
+\vspace{0.9cm}
+
+{\sffamily\Large\color{rink} A hands-on manual for someone who has\\[3pt]
+never drawn a single triangle in 3D\par}
+
+\vspace{1.6cm}
+
+\begin{tikzpicture}[scale=1.25]
+  \fill[rlight] (-3.3,-1.5) rectangle (3.3,1.9);
+  \draw[->,rred,line width=1.6pt]   (0,0) -- (2.0,0)      node[right] {\sffamily\small $+X$};
+  \draw[->,rgreen,line width=1.6pt] (0,0) -- (0,1.5)      node[above] {\sffamily\small $+Y$};
+  \draw[->,rblue,line width=1.6pt]  (0,0) -- (-1.25,-1.0) node[below left] {\sffamily\small $+Z$};
+  \fill[rink] (0,0) circle (1.6pt);
+\end{tikzpicture}
+
+\vspace{1.6cm}
+
+{\sffamily\color{rgrey}\large Window and frame loop $\cdot$ drawing $\cdot$ input $\cdot$ cameras\\[3pt]
+2D and 3D $\cdot$ collisions $\cdot$ and a silly little Doom at the end\par}
+
+\vfill
+{\sffamily\small\color{rgrey} Written against raylib 6.1-dev \quad$\cdot$\quad all code in this manual compiles and runs\par}
+\end{titlepage}
+
+\tableofcontents
+\thispagestyle{empty}
+\clearpage
+\setcounter{page}{1}
+
+\part{Making a game}
+
+\input{parts/ch01}
+\input{parts/ch02}
+\input{parts/ch03}
+\input{parts/ch04}
+\input{parts/ch05}
+\input{parts/ch06}
+\input{parts/ch07}
+\input{parts/ch08}
+\input{parts/ch09}
+\input{parts/ch10}
+\input{parts/ch11}
+\input{parts/ch12}
+\input{parts/ch13}
+\input{parts/ch14}
+\part{The rest of the library}
+
+\input{parts/ch15}
+\input{parts/ch16}
+\input{parts/ch17}
+\input{parts/ch18}
+\input{parts/ch19}
+\input{parts/ch20}
+\input{parts/ch21}
+
+\input{parts/ch22}
+
+\appendix
+\input{parts/appA}
+\input{parts/appB}
+\input{parts/appC}
+
+\end{document}

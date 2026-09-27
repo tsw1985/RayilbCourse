@@ -1,0 +1,149 @@
+\chapter{The 3D camera}
+
+\section{It is five numbers, and none of them are magic}
+
+\begin{lstlisting}
+typedef struct Camera3D {
+    Vector3 position;     // where the eye is
+    Vector3 target;       // the world point it is looking at
+    Vector3 up;           // which way is "up" for the camera
+    float fovy;           // vertical field of view, in DEGREES
+    int projection;       // CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+} Camera3D;
+\end{lstlisting}
+
+\begin{center}
+\begin{tikzpicture}[scale=1.25,every node/.style={font=\sffamily\footnotesize}]
+  \fill[rlight,rounded corners=3pt] (-1.2,-1.6) rectangle (7.6,2.4);
+
+  % eye
+  \fill[rink] (0,0) circle (2.4pt);
+  \node[left,text=rink] at (-0.12,0) {\texttt{position}};
+
+  % target
+  \fill[rorange] (5.4,0.6) circle (2.6pt);
+  \node[right,text=rorange] at (5.6,0.6) {\texttt{target}};
+
+  % view direction
+  \draw[->,rgrey,dashed] (0,0) -- (5.3,0.59);
+  \node[below,text=rgrey] at (2.7,0.18) {direction = normalize(target - position)};
+
+  % frustum
+  \draw[rblue,line width=0.9pt] (0,0) -- (6.4,1.9);
+  \draw[rblue,line width=0.9pt] (0,0) -- (6.4,-0.75);
+  \draw[rblue,->] (1.6,0.48) arc (16.5:-8:1.7);
+  \node[right,text=rblue] at (1.85,0.05) {\texttt{fovy}};
+
+  % up
+  \draw[->,rgreen,line width=1.2pt] (0,0) -- (0,1.5);
+  \node[above,text=rgreen] at (0,1.5) {\texttt{up} = (0,1,0)};
+\end{tikzpicture}
+\end{center}
+
+Notice what is \emph{not} in that struct: there is no field for the direction the
+camera is facing, and no rotation angles. The direction is worked out from the
+two points:
+
+\[ \text{direction} = \text{normalize}(\text{target} - \text{position}) \]
+
+Which gives you the two operations you will use forever:
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{To turn the camera}: move the \lstinline|target|, leave
+        \lstinline|position| alone.
+  \item \textbf{To move the camera}: move \lstinline|position| \emph{and}
+        \lstinline|target| by the same amount, so it does not turn while it
+        travels.
+\end{itemize}
+
+\gotcha{Move only \lstinline|position| and the camera swings round to keep
+staring at the old target, like a security camera tracking you. That is
+occasionally what you want and usually a bug.}
+
+\section{fovy, or choosing a lens}
+
+\lstinline|fovy| is the vertical angle the camera can see, in degrees. It behaves
+exactly like a camera lens:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{fovy} & \textbf{Feels like} \\
+\midrule
+20--30 & telephoto: flat, compressed, distant \\
+45 & neutral, good for inspecting an object \\
+60--75 & the normal first person game range \\
+90+ & fisheye: fast, dizzying, very wide \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Doom-like shooters tend to sit around 70 to 90, which is why the mini Doom in
+chapter 14 uses 75.
+
+\section{Perspective versus orthographic}
+
+\lstinline|CAMERA_PERSPECTIVE| is what your eyes do: distant things look smaller,
+parallel lines converge.
+
+\lstinline|CAMERA_ORTHOGRAPHIC| removes that. Distance stops affecting size and
+parallel lines stay parallel. This is the look of isometric strategy games, of
+CAD, and of 2D games faking depth.
+
+\gotcha{When you switch to orthographic, \lstinline|fovy| stops meaning degrees
+and starts meaning \emph{how many world units fit vertically on screen}. Leave it
+at 45 and your world is 45 metres tall in the window --- everything is a speck.
+Set something like 10 and it looks sane again.}
+
+\section{Begin and End, again}
+
+\begin{lstlisting}
+BeginMode3D(camera);
+    DrawGrid(20, 1.0f);
+    DrawCube((Vector3){ 0, 1, 0 }, 2, 2, 2, MAROON);
+EndMode3D();
+
+// back to 2D screen pixels: the HUD
+DrawText("HEALTH 100", 20, 20, 20, RAYWHITE);
+DrawFPS(10, 10);
+\end{lstlisting}
+
+Exactly the same contract as \lstinline|BeginMode2D| in chapter 8: inside is
+world space, outside is screen pixels. Your crosshair, health bar, ammo counter
+and minimap all go outside, and that is why they stay nailed to the window while
+the world moves.
+
+There is one extra thing \lstinline|BeginMode3D| does that the 2D version does
+not: it enables the \textbf{depth buffer}. In 2D the draw order decided what was
+on top; in 3D the GPU compares distances per pixel, so a cube behind another cube
+is hidden correctly no matter which order you drew them in. You get that for
+free.
+
+\gotcha{Transparency is the exception. The depth buffer works per pixel, and a
+half transparent surface writes depth as if it were solid, which can hide things
+behind it. If you draw transparent objects, draw them after the opaque ones,
+furthest first. You will not hit this for a while, but when a glass wall makes
+things vanish, this is why.}
+
+\section{The ready-made cameras}
+
+Before writing your own, try raylib's:
+
+\begin{lstlisting}
+UpdateCamera(&camera, CAMERA_FREE);           // fly around: WASD, mouse, wheel
+UpdateCamera(&camera, CAMERA_ORBITAL);        // spins around the target by itself
+UpdateCamera(&camera, CAMERA_FIRST_PERSON);   // classic FPS
+UpdateCamera(&camera, CAMERA_THIRD_PERSON);   // follows the target from behind
+\end{lstlisting}
+
+One line, in the update section, and the camera works. For first and third
+person, call \lstinline|DisableCursor()| first so the mouse is captured.
+
+They are perfect for looking at a model or prototyping a scene, and they run out
+of road the moment you want collisions, crouching, recoil, a vehicle, or a camera
+that does anything specific to your game. That is the subject of the next
+chapter.
+
+\tryit{Lesson 2 of the 3D course lets you move each of the five camera fields
+with the keyboard and watch the numbers; lesson 3 cycles the four built-in modes
+with TAB.}{./course3d/build.sh 2 \quad and \quad ./course3d/build.sh 3}

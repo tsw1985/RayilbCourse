@@ -1,0 +1,205 @@
+\chapter{The screen: coordinates, colour, shapes}
+
+\section{Where is (0,0)?}
+
+Top left corner. X grows to the right, Y grows \emph{downwards}.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.95,every node/.style={font=\sffamily\small}]
+  \fill[rlight] (0,0) rectangle (9,-4.6);
+  \draw[codeframe] (0,0) rectangle (9,-4.6);
+  \foreach \x in {1,2,...,8} \draw[codeframe] (\x,0) -- (\x,-4.6);
+  \foreach \y in {1,2,3,4} \draw[codeframe] (0,-\y) -- (9,-\y);
+
+  \fill[rink] (0,0) circle (2.2pt);
+  \node[above right,font=\sffamily\footnotesize] at (0.1,0.05) {(0,0)};
+
+  \draw[->,rred,line width=1.3pt] (0,0) -- (3,0) node[above,pos=0.8] {X grows right};
+  \draw[->,rgreen,line width=1.3pt] (0,0) -- (0,-2.6) node[right,pos=0.85,align=left] {Y grows\\ \textbf{down}};
+
+  \fill[rblue] (5,-2) rectangle (7.4,-3.4);
+  \fill[rink] (5,-2) circle (2pt);
+  \node[above,font=\sffamily\footnotesize,text=rink] at (5,-1.95) {(x, y)};
+  \draw[<->,rgrey] (5,-3.7) -- node[below,font=\sffamily\footnotesize] {width} (7.4,-3.7);
+  \draw[<->,rgrey] (7.7,-2) -- node[right,font=\sffamily\footnotesize] {height} (7.7,-3.4);
+
+  \node[below right,font=\sffamily\footnotesize,text=rgrey] at (0.1,-4.75) {DrawRectangle(x, y, width, height, color)};
+\end{tikzpicture}
+\end{center}
+
+If you did maths at school, Y pointing down feels wrong. It comes from how
+screens were scanned, line by line from the top, and every 2D graphics API on
+earth inherited it.
+
+\gotcha{In 3D (chapter 9) Y goes back to pointing \emph{up}. Same letter,
+opposite direction, in the same program, sometimes on the same screen. When
+something moves the wrong way vertically, this is the first thing to check:
+which of the two worlds am I in?}
+
+Two helpers give you the current window size, and you should prefer them over
+hardcoding the numbers you passed to \lstinline|InitWindow|, because the window
+can be resized:
+
+\begin{lstlisting}
+int w = GetScreenWidth();
+int h = GetScreenHeight();
+DrawText("centred-ish", w/2 - 60, h/2, 20, DARKGRAY);
+\end{lstlisting}
+
+\section{Corners and centres}
+
+\lstinline|DrawRectangle| takes the \textbf{top-left corner}.
+\lstinline|DrawCircle| takes the \textbf{centre}. That inconsistency has burned
+every raylib beginner, so hold on to it:
+
+\begin{lstlisting}
+DrawRectangle(100, 100, 80, 40, MAROON);   // corner at (100,100), 80x40
+DrawCircle(100, 100, 30, DARKBLUE);        // CENTRE at (100,100), radius 30
+\end{lstlisting}
+
+If you want a rectangle centred at a point, you subtract half its size yourself:
+
+\begin{lstlisting}
+DrawRectangle(cx - w/2, cy - h/2, w, h, MAROON);
+\end{lstlisting}
+
+You will write that line a thousand times. In the 3D chapters it comes back as
+\lstinline|BoxFromCenter()|, which is the same idea with one more axis.
+
+\section{Rectangle, the struct you will live in}
+
+\begin{lstlisting}
+typedef struct Rectangle {
+    float x;        // LEFT edge
+    float y;        // TOP edge
+    float width;
+    float height;
+} Rectangle;
+\end{lstlisting}
+
+Many functions take one of these instead of four loose numbers, and the
+collision functions all do. Get used to building them inline:
+
+\begin{lstlisting}
+Rectangle player = { 100, 100, 40, 40 };
+DrawRectangleRec(player, DARKBLUE);
+DrawRectangleLinesEx(player, 2, BLACK);
+\end{lstlisting}
+
+\section{Colour}
+
+A \lstinline|Color| is four bytes, each 0 to 255:
+
+\begin{lstlisting}
+typedef struct Color { unsigned char r, g, b, a; } Color;
+
+Color myOrange = { 230, 120, 20, 255 };          // opaque
+Color ghost    = { 230, 120, 20, 90 };           // mostly transparent
+\end{lstlisting}
+
+\lstinline|a| is alpha: 255 is solid, 0 is invisible. raylib ships about
+twenty-five named colours --- \lstinline|RAYWHITE|, \lstinline|DARKGRAY|,
+\lstinline|MAROON|, \lstinline|SKYBLUE|, \lstinline|GOLD|, \lstinline|BLANK|
+(fully transparent) and friends --- and one very handy helper:
+
+\begin{lstlisting}
+DrawRectangle(10, 10, 100, 100, Fade(BLUE, 0.5f));   // BLUE at 50% alpha
+\end{lstlisting}
+
+\lstinline|Fade| returns a copy of the colour with the alpha scaled. Use it for
+shadows, overlays, ghosts and dimmed HUDs instead of writing the struct out.
+
+\gotcha{When you write a colour inline you need the cast, because C needs to
+know what the braces mean: \lstinline|DrawRectangle(0,0,10,10,(Color){20,20,25,255})|.
+Forgetting the \lstinline|(Color)| gives you a confusing compiler error about
+initialisation.}
+
+\section{The order of your draw calls is the layer order}
+
+There is no z-index, no layer system and no sorting. Whatever you draw last is
+on top. Painting a picture, literally.
+
+\begin{lstlisting}
+DrawRectangle(640, 340, 100, 100, DARKPURPLE);   // painted first: underneath
+DrawCircle(700, 400, 45, GOLD);                  // painted last:  on top
+\end{lstlisting}
+
+That means the structure of your draw section is your scene's depth. Background
+first, then the world, then characters, then effects, then the HUD last of all.
+When something is mysteriously invisible, nine times out of ten it is being drawn
+\emph{before} something opaque.
+
+\section{Text}
+
+\begin{lstlisting}
+DrawText("Hello", 20, 20, 20, DARKGRAY);        // text, x, y, fontSize, color
+int width = MeasureText("Hello", 20);           // how wide would it be?
+\end{lstlisting}
+
+\lstinline|MeasureText| is how you centre text, since there is no alignment
+parameter:
+
+\begin{lstlisting}
+const char *txt = "GAME OVER";
+DrawText(txt, GetScreenWidth()/2 - MeasureText(txt, 60)/2, 200, 60, RED);
+\end{lstlisting}
+
+And to print variables, \lstinline|TextFormat| is raylib's
+\lstinline|sprintf| that manages the buffer for you:
+
+\begin{lstlisting}
+DrawText(TextFormat("score: %i   time: %.2f", score, GetTime()), 20, 20, 20, BLACK);
+\end{lstlisting}
+
+\gotcha{\lstinline|TextFormat| writes into an internal rotating buffer. It is
+perfect for drawing this frame and wrong for storing: never keep the returned
+pointer across frames, copy the string if you need it later.}
+
+\section{The shapes you actually use}
+
+There are about forty drawing functions; these are the ones that cover almost
+everything:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Function} & \textbf{Notes} \\
+\midrule
+\lstinline|DrawRectangle(x,y,w,h,c)| & corner based \\
+\lstinline|DrawRectangleRec(rec,c)| & takes a \lstinline|Rectangle| \\
+\lstinline|DrawRectangleLinesEx(rec,thick,c)| & outline with thickness \\
+\lstinline|DrawRectangleRounded(rec,round,seg,c)| & rounded corners \\
+\lstinline|DrawCircle(cx,cy,r,c)| & centre based \\
+\lstinline|DrawCircleLines(cx,cy,r,c)| & outline \\
+\lstinline|DrawLine(x1,y1,x2,y2,c)| & one pixel thin \\
+\lstinline|DrawLineEx(v1,v2,thick,c)| & with thickness \\
+\lstinline|DrawTriangle(v1,v2,v3,c)| & \textbf{counter-clockwise} vertices \\
+\lstinline|DrawPoly(centre,sides,r,rot,c)| & regular polygon \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The naming pattern repeats across the whole library and is worth learning as a
+rule rather than as forty separate facts:
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item plain name, e.g. \lstinline|DrawCircle| --- the simple version, loose
+        \lstinline|int| coordinates;
+  \item \textbf{V} suffix, e.g. \lstinline|DrawCircleV| --- same thing but taking
+        a \lstinline|Vector2|;
+  \item \textbf{Rec} suffix --- takes a \lstinline|Rectangle|;
+  \item \textbf{Ex} suffix --- extended: extra parameters like thickness;
+  \item \textbf{Pro} suffix --- all the knobs: origin, rotation, scaling;
+  \item \textbf{Lines} in the name --- outline instead of filled.
+\end{itemize}
+
+Once you see that, you can guess most of raylib without looking anything up.
+
+\gotcha{\lstinline|DrawTriangle| wants its three vertices in counter-clockwise
+order. Give them clockwise and the triangle is facing away from you, so it gets
+culled and you see nothing at all. If a triangle is invisible, swap two of its
+vertices before you look for any other bug.}
+
+\tryit{Lesson 2 draws the coordinate grid, every basic shape labelled, alpha
+blending, and lets you swap the draw order with SPACE to watch the layering
+change.}{./course2d/build.sh 2}

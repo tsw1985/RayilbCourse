@@ -1,0 +1,114 @@
+\chapter{Into 3D: the three axes}
+
+\section{One new number}
+
+A 3D point is a 2D point with a third number bolted on. That is genuinely all
+that changes at the level of data:
+
+\begin{lstlisting}
+typedef struct Vector2 { float x, y; } Vector2;
+typedef struct Vector3 { float x, y, z; } Vector3;
+\end{lstlisting}
+
+What changes is what those numbers \emph{mean}, and that is where the
+disorientation comes from, so let us be very clear about it.
+
+\section{Which way each axis points}
+
+\begin{center}
+\begin{tikzpicture}[scale=1.5,every node/.style={font=\sffamily\small}]
+  \fill[rlight,rounded corners=3pt] (-3.4,-2.0) rectangle (3.4,2.2);
+
+  \draw[->,rred,line width=1.6pt]   (0,0) -- (2.1,0)       node[right]      {$+X$ \ \ to your right};
+  \draw[->,rgreen,line width=1.6pt] (0,0) -- (0,1.8)       node[above]      {$+Y$ \ \ up};
+  \draw[->,rblue,line width=1.6pt]  (0,0) -- (-1.5,-1.2)   node[below left] {$+Z$ \ \ towards you};
+
+  \draw[rred,line width=0.7pt,opacity=0.35]   (0,0) -- (-1.4,0);
+  \draw[rgreen,line width=0.7pt,opacity=0.35] (0,0) -- (0,-1.2);
+  \draw[rblue,line width=0.7pt,opacity=0.35]  (0,0) -- (1.0,0.8);
+
+  \fill[rink] (0,0) circle (1.6pt);
+  \node[below right,font=\sffamily\footnotesize,text=rgrey] at (0.05,-0.08) {origin (0,0,0)};
+\end{tikzpicture}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Axis} & \textbf{Negative} & \textbf{Positive} & \textbf{Think of it as} \\
+\midrule
+X & left & right & sideways \\
+Y & down & \textbf{up} & \textbf{height} \\
+Z & far away & towards you & depth \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+This is a \emph{right-handed} system, the same as OpenGL. If you want to check it
+physically: point your right thumb along $+X$ and your index finger along $+Y$,
+and your middle finger points along $+Z$, out of the screen at you.
+
+\gotcha{Y now points \textbf{up}. In the 2D half of this manual it pointed
+\textbf{down}. Both are true, in their own space, and both are live in the same
+program --- a 3D game with a HUD uses both in the same frame. When something
+moves vertically the wrong way, ask yourself which space that line is in.}
+
+\section{The floor is the XZ plane}
+
+This is the sentence that makes 3D click for most people.
+
+Height is Y. So a floor --- a flat surface at a constant height --- is all the
+points where Y is the same, usually zero. The two axes left over, X and Z, are
+the ones you walk around on.
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item A top-down map of your level only needs X and Z. That is why the minimap
+        in chapter 14 maps world X to screen X and world Z to screen Y.
+  \item \lstinline|DrawGrid(20, 1.0f)| draws its grid on the XZ plane at
+        $Y = 0$, because that is the floor.
+  \item Walking means changing X and Z. Jumping means changing Y.
+\end{itemize}
+
+\keyidea{X and Z are the ground. Y is how high you are. A character walking
+around a room is a 2D problem in X and Z, with a Y that mostly stays at one
+value.}
+
+\section{Objects sit on the floor, they do not live at zero}
+
+\lstinline|DrawCube| takes the \textbf{centre} of the cube. So a cube of height 2
+resting on the floor has its centre at $Y = 1$, not $Y = 0$. Put it at zero and
+half the cube is buried underground.
+
+\begin{lstlisting}
+DrawCube((Vector3){ 0, 1, 0 }, 2, 2, 2, MAROON);   // a 2x2x2 cube ON the floor
+\end{lstlisting}
+
+And mind the parameter order, which quietly encodes the axes:
+
+\begin{lstlisting}
+DrawCube(centre, width, height, length, colour);
+//               ^X     ^Y      ^Z
+\end{lstlisting}
+
+\lstinline|width| is the size along X, \lstinline|height| along Y,
+\lstinline|length| along Z. There is a \lstinline|DrawCubeV| that takes a
+\lstinline|Vector3| size instead, which removes the ambiguity, and it is the one
+worth preferring once the axes are second nature.
+
+\section{Units}
+
+raylib has no opinion about what one unit means. Pick one and keep it. This
+course uses \textbf{one unit = one metre}, so every number you write is something
+you can picture:
+
+\begin{lstlisting}
+#define EYE_HEIGHT  1.7f    // a person's eyes
+float walkSpeed =   4.0f;   // metres per second, a brisk walk
+\end{lstlisting}
+
+Once your constants are in metres and seconds, you can spot a wrong number just
+by reading it.
+
+\tryit{Lesson 1 of the 3D course draws the three axes in their standard colours
+--- X red, Y green, Z blue --- and lets you jump the camera onto each axis in
+turn with the keys 1 to 4.}{./course3d/build.sh 1}

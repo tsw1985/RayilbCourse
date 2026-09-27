@@ -1,0 +1,111 @@
+\chapter{Where to go from here}
+
+\section{What you have now}
+
+Part I took you from an empty \lstinline|main()| to a first person shooter. Part
+II walked the rest of the library module by module. Between the two, the code in
+this repository calls about 240 of raylib's 619 functions --- and the rest is
+mostly depth inside modules you have already met, not new territory.
+
+More to the point: you can now read \file{raylib.h} and understand what you are
+looking at. That was always the real goal, because that header is the
+documentation and nothing else is.
+
+\section{The examples are the next teacher}
+
+The official examples live in
+\file{build/external/raylib-master/examples}, 225 programs sorted by module. With
+this manual behind you they are readable rather than intimidating.
+
+Worth opening first, in this order:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\file{core/core\_3d\_camera\_first\_person.c} & the official version of chapter 12 \\
+\file{models/models\_first\_person\_maze.c} & the official version of chapter 14 \\
+\file{shapes/shapes\_collision\_area.c} & collision resolution, done cleanly \\
+\file{textures/textures\_sprite\_anim.c} & sprite sheets in practice \\
+\file{audio/audio\_sound\_multi.c} & overlapping sounds without clipping \\
+\file{shaders/shaders\_basic\_lighting.c} & where the flat look finally goes away \\
+\file{others/rlgl\_standalone.c} & the layer under raylib, when you need it \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Three things this manual did not cover}
+
+\begin{enumerate}[leftmargin=*,itemsep=5pt]
+  \item \textbf{raygui.} An immediate-mode GUI library in a single header, and it
+        is \emph{already in your examples folder}
+        (\file{examples/*/raygui.h}). Buttons, sliders, checkboxes, dropdowns and
+        text boxes, in the same style as the rest of raylib:
+\begin{lstlisting}
+#define RAYGUI_IMPLEMENTATION
+#include "raygui.h"
+
+if (GuiButton((Rectangle){ 20, 20, 120, 30 }, "Start")) StartGame();
+GuiSlider((Rectangle){ 20, 60, 200, 20 }, "vol", NULL, &volume, 0.0f, 1.0f);
+\end{lstlisting}
+        For a pause menu or an options screen it turns a day of work into an hour.
+
+  \item \textbf{rlgl.} The layer raylib itself is built on: a thin abstraction
+        over OpenGL that lets you push vertices directly. You want it the day you
+        need a custom blend mode, instanced rendering or geometry raylib has no
+        function for. It is \file{src/rlgl.h}, and it is standalone.
+
+  \item \textbf{Shipping.} Building for the web with Emscripten, packaging for
+        Windows from Linux, bundling assets. The project wiki on raylib.com is
+        the reference, and the examples folder ships a working
+        \file{Makefile.Web} to start from.
+\end{enumerate}
+
+\section{The tools on raylib.com}
+
+Ramon Santamaria, raylib's author, also writes small tools that pair with it.
+They are not part of the library and you download them separately:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{rFXGen} & generates retro sound effects with sliders \\
+\textbf{rTexPacker} & packs sprites into an atlas \\
+\textbf{rTexViewer} & views and converts textures \\
+\textbf{rGuiStyler} & themes for raygui \\
+\textbf{rGuiLayout} & lays out raygui screens and exports the C code \\
+\textbf{rIconPacker} & builds \file{.ico} files \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+rFXGen in particular is worth ten minutes: chapter 15 showed you how those sounds
+are synthesised, and the tool lets you find one by ear instead of by arithmetic.
+
+\section{Habits worth keeping}
+
+\begin{itemize}[leftmargin=*,itemsep=4pt]
+  \item Update and draw stay separate. Update changes variables, draw paints them.
+  \item Every speed is per second and gets multiplied by \lstinline|dt|.
+  \item Every \lstinline|Load...| has an \lstinline|Unload...|, outside the loop,
+        on both sides.
+  \item Detect collisions with one call; resolve them one axis at a time.
+  \item Anything inside a \lstinline|Begin|/\lstinline|End| pair is in that
+        pair's space. The HUD goes outside.
+  \item When something is invisible, check the draw order and the camera before
+        suspecting anything clever.
+  \item When a collision misbehaves, draw the box.
+  \item Game state in a struct, plus a reset function.
+  \item When stuck, open \file{raylib.h} and search. The answer is one grep away.
+\end{itemize}
+
+\section{A last word}
+
+The gap between this manual and a game you would show someone is not more
+knowledge --- it is repetitions. You have the loop, the cameras, the collisions,
+the maths, the sound and the shaders. What is left is choosing something small,
+finishing it, and discovering the twenty tiny problems that only show up when you
+try.
+
+Make the mini Doom yours. Add a door that opens. Add a key that opens it. Add a
+sound when it does. Add a second level. Each of those is an afternoon, and each
+one teaches more than a chapter.

@@ -1,0 +1,167 @@
+\chapter{Meshes, models and materials}
+
+Chapter 11 drew everything with \lstinline|DrawCube| and friends. Those are
+throwaways: they build geometry from scratch every frame and cannot carry a
+texture. This chapter is the step up.
+
+\section{The three layers}
+
+\begin{center}
+\begin{tabular}{@{}lp{9.2cm}@{}}
+\toprule
+\textbf{\lstinline|Mesh|} & raw geometry: vertex positions, normals, texture
+coordinates. Lives on the GPU. No colour, no texture. \\[3pt]
+\textbf{\lstinline|Material|} & how a surface looks: a shader plus a set of
+texture maps (diffuse, normal, roughness\ldots) and a tint. \\[3pt]
+\textbf{\lstinline|Model|} & one or more meshes, one or more materials, and a
+transform matrix tying them together. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A model loaded from a \file{.glb} file arrives with all three filled in. When you
+build one yourself, you assemble them:
+
+\begin{lstlisting}
+Mesh mesh   = GenMeshCube(2.0f, 2.0f, 2.0f);
+Model model = LoadModelFromMesh(mesh);          // wraps it, default white material
+\end{lstlisting}
+
+\section{Generating geometry}
+
+You do not need a modelling program to get real meshes:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|GenMeshCube(w, h, l)| & a box \\
+\lstinline|GenMeshSphere(radius, rings, slices)| & more rings = smoother, slower \\
+\lstinline|GenMeshPlane(w, l, resX, resZ)| & a floor; resolution matters if you deform it \\
+\lstinline|GenMeshCylinder(radius, height, slices)| & pillars, trees, barrels \\
+\lstinline|GenMeshTorus(radius, size, rad, sides)| & a doughnut \\
+\lstinline|GenMeshKnot(...)| & a torus knot, for showing off \\
+\lstinline|GenMeshHeightmap(image, size)| & \textbf{terrain from a greyscale image} \\
+\lstinline|GenMeshCubicmap(image, size)| & \textbf{a 3D maze from a pixel map} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Those last two deserve attention. \lstinline|GenMeshHeightmap| turns a greyscale
+picture into hills, where brightness is altitude. \lstinline|GenMeshCubicmap|
+turns a black-and-white pixel map into walls --- it is the mini Doom's text map,
+except it produces a single mesh instead of hundreds of separate cubes, so it
+draws in one call instead of two hundred.
+
+\section{Putting a texture on something}
+
+This is the thing \lstinline|DrawCube| cannot do:
+
+\begin{lstlisting}
+Texture2D tex = LoadTexture("wall.png");
+model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = tex;
+\end{lstlisting}
+
+Read it inside out: the model's first material, its diffuse map, its texture.
+\lstinline|MATERIAL_MAP_DIFFUSE| is the plain colour map; there are slots for
+normal maps, roughness, occlusion and the rest, which only matter once you have a
+shader that reads them.
+
+You can tint per draw as well, and the two multiply:
+
+\begin{lstlisting}
+DrawModel(model, position, 1.0f, WHITE);    // texture as-is
+DrawModel(model, position, 1.0f, RED);      // texture tinted red
+\end{lstlisting}
+
+\section{Drawing}
+
+\begin{lstlisting}
+DrawModel(model, position, scale, tint);
+DrawModelEx(model, position, rotationAxis, rotationAngle, scaleVec3, tint);
+DrawModelWires(model, position, scale, tint);
+DrawBoundingBox(GetMeshBoundingBox(mesh), GREEN);
+\end{lstlisting}
+
+\lstinline|DrawModelEx| is the one you want for anything that turns: an axis, an
+angle in degrees, and a per-axis scale.
+
+\begin{lstlisting}
+DrawModelEx(model, pos, (Vector3){ 0, 1, 0 }, angle, (Vector3){ 1, 1, 1 }, WHITE);
+\end{lstlisting}
+
+Rotating around \lstinline|(0,1,0)| means spinning about the vertical axis, which
+is what you want for a character turning or a pickup idling.
+
+\section{Loading real models}
+
+\begin{lstlisting}
+Model robot = LoadModel("robot.glb");       // once
+DrawModel(robot, position, 1.0f, WHITE);    // every frame
+UnloadModel(robot);                         // once
+\end{lstlisting}
+
+raylib reads \file{.obj}, \file{.gltf}, \file{.glb}, \file{.iqm}, \file{.m3d} and
+\file{.vox}. Prefer \textbf{\file{.glb}}: it packs the mesh, the materials and the
+textures into one file, so there is nothing to go missing and no paths to fix.
+
+\gotcha{\lstinline|UnloadModel| frees the meshes it owns but deliberately does
+\emph{not} free textures or shaders --- you might be sharing them between models,
+so raylib leaves them to you. Unload your textures yourself, exactly once.}
+
+\section{Animation}
+
+\begin{lstlisting}
+int animCount = 0;
+ModelAnimation *anims = LoadModelAnimations("robot.glb", &animCount);
+int frame = 0;
+
+// in the loop:
+frame = (frame + 1) % anims[0].frameCount;
+UpdateModelAnimation(robot, anims[0], frame);
+DrawModel(robot, position, 1.0f, WHITE);
+
+UnloadModelAnimations(anims, animCount);
+\end{lstlisting}
+
+The model must have been exported with a skeleton, \file{.glb} and \file{.iqm}
+being the usual choices. Note that stepping \lstinline|frame| once per frame ties
+the animation to your frame rate --- use a timer, as in chapter 5, if you care.
+
+\section{Billboards: the old trick, still useful}
+
+A billboard is a flat image that always turns to face the camera. Every enemy in
+Doom was one.
+
+\begin{lstlisting}
+DrawBillboard(camera, texture, position, size, WHITE);
+DrawBillboardRec(camera, texture, sourceRec, position, size, WHITE);  // one sprite of a sheet
+\end{lstlisting}
+
+They are cheap, they look deliberately retro, and \lstinline|DrawBillboardRec|
+lets you animate them from a sprite sheet exactly as in chapter 7. For particles,
+smoke, flames and pickups they are still the right answer today.
+
+\section{When to stop using DrawCube}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Stay with immediate shapes if} & \textbf{Move to models when} \\
+\midrule
+prototyping & you want textures \\
+a handful of objects & you want lighting via a shader \\
+debug visualisation & you draw hundreds of the same thing \\
+flat colour is fine & you need animation \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+And when you are drawing the same mesh thousands of times --- grass, crowds,
+asteroids --- there is \lstinline|DrawMeshInstanced|, which sends one mesh and an
+array of transforms in a single call. It is the difference between 50 FPS and
+2000.
+
+\tryit{Module 8 generates a cube, a sphere and a torus, puts a generated
+checkerboard on the cube's material, draws a billboard, and lets you click any
+object to pick it with a ray. TAB switches between models, immediate shapes and
+wireframe so you can compare them.}{./cheatsheet/build.sh 8}

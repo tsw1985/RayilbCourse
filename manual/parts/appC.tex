@@ -1,0 +1,115 @@
+\chapter{The lessons, at a glance}
+
+Every file compiles on its own and runs on its own. Build any of them with the
+folder's \file{build.sh} script and the lesson number.
+
+\section{course2d --- the fundamentals}
+
+\begin{center}
+\begin{tabular}{@{}llp{7.0cm}@{}}
+\toprule
+\textbf{\#} & \textbf{File} & \textbf{What it shows} \\
+\midrule
+1 & \file{lesson01\_window.c} & the frame loop, Begin/EndDrawing, immediate mode \\
+2 & \file{lesson02\_shapes.c} & screen coordinates, every basic shape, alpha, draw order \\
+3 & \file{lesson03\_input.c} & pressed vs down, and delta time against per-frame movement \\
+4 & \file{lesson04\_collision2d.c} & CheckCollisionRecs and per-axis resolution \\
+5 & \file{lesson05\_textures.c} & Image vs Texture, sprite sheets, timer-driven animation \\
+6 & \file{lesson06\_camera2d.c} & Camera2D, world vs screen space, HUD outside the pair \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{course3d --- the 3D half}
+
+\begin{center}
+\begin{tabular}{@{}llp{7.0cm}@{}}
+\toprule
+\textbf{\#} & \textbf{File} & \textbf{What it shows} \\
+\midrule
+1 & \file{lesson01\_axes.c} & X, Y and Z, from four different viewpoints \\
+2 & \file{lesson02\_camera.c} & the five camera fields, moved live with the keyboard \\
+3 & \file{lesson03\_modes.c} & the four built-in UpdateCamera modes \\
+4 & \file{lesson04\_movement.c} & yaw, pitch, forward and right, built by hand \\
+5 & \file{lesson05\_collision.c} & AABB collision with the three axis overlaps shown \\
+6 & \file{lesson06\_scene.c} & a closed room whose walls actually stop you \\
+7 & \file{lesson07\_mini\_doom.c} & the lot: text map, grid collision, shooting, HUD, minimap \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{cheatsheet --- one example per module (Part II)}
+
+\begin{center}
+\begin{tabular}{@{}llp{6.3cm}@{}}
+\toprule
+\textbf{\#} & \textbf{File} & \textbf{Module, and what it shows} \\
+\midrule
+1 & \file{m1\_rcore\_window.c} & rcore: window state, flags, monitors, cursor, timing \\
+2 & \file{m2\_rcore\_input.c} & rcore: keyboard, mouse, gamepad, touch, gestures, file drop \\
+3 & \file{m3\_rcore\_shaders.c} & rcore: GLSL from memory, uniforms, BeginShaderMode \\
+4 & \file{m4\_rcore\_misc.c} & rcore: save files, paths, random, logging, clipboard, compression \\
+5 & \file{m5\_rshapes.c} & rshapes: every 2D shape, splines, collision tests \\
+6 & \file{m6\_rtextures.c} & rtextures: image generation and editing, render textures, colour \\
+7 & \file{m7\_rtext.c} & rtext: fonts, measuring, string helpers, UTF-8 \\
+8 & \file{m8\_rmodels.c} & rmodels: meshes, models, materials, billboards, ray picking \\
+9 & \file{m9\_raudio.c} & raudio: synthesised sounds, streamed music, live audio streams \\
+10 & \file{m10\_raymath.c} & raymath: vectors, dot and cross, lerp, matrices, quaternions \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+None of them loads an external asset: every image, sound and tune is generated in
+code, so each file compiles and runs on its own.
+
+\section{Which chapter goes with which example}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Chapter} & \textbf{Subject} & \textbf{Example} \\
+\midrule
+15 & sound and music & \lstinline|./cheatsheet/build.sh 9| \\
+16 & shaders & \lstinline|./cheatsheet/build.sh 3| \\
+17 & meshes, models, materials & \lstinline|./cheatsheet/build.sh 8| \\
+18 & images, render textures, colour & \lstinline|./cheatsheet/build.sh 6| \\
+19 & fonts and text & \lstinline|./cheatsheet/build.sh 7| \\
+20 & saving, window, other input & \lstinline|./cheatsheet/build.sh 4, 1, 2| \\
+21 & raymath & \lstinline|./cheatsheet/build.sh 10| \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Controls, by lesson}
+
+\begin{center}
+\begin{tabular}{@{}lp{9.6cm}@{}}
+\toprule
+\textbf{Lesson} & \textbf{Keys} \\
+\midrule
+2d/2 & SPACE swaps the draw order \\
+2d/3 & WASD or arrows move, SPACE pulses, left click teleports \\
+2d/4 & WASD move, SPACE toggles solid and ghost walls \\
+2d/5 & SPACE pauses, UP/DOWN change the animation speed \\
+2d/6 & WASD move, wheel zooms, Q/E rotate, R resets \\
+3d/1 & 1, 2, 3, 4 change viewpoint, SPACE toggles the helper cubes \\
+3d/2 & arrows and PgUp/PgDn move the eye, IJKL and U/O move the target, +/- fovy, P projection, R reset \\
+3d/3 & TAB cycles camera mode \\
+3d/4 & mouse looks, WASD moves, SHIFT runs, SPACE/CTRL fly, TAB frees the mouse \\
+3d/5 & WASD on X and Z, Q/E height, R reset, wheel zooms \\
+3d/6 & WASD move, mouse look, SHIFT run, TAB free mouse, R reset \\
+3d/7 & WASD move, mouse look, SHIFT run, LEFT CLICK shoot, R restart, TAB free mouse \\
+\midrule
+cs/1 & F fullscreen, B borderless, M maximize, C cursor, P screenshot \\
+cs/2 & type anything, drag a file in, plug in a gamepad \\
+cs/3 & 0-3 pick a shader, mouse moves the light, SPACE pauses time \\
+cs/4 & R random, S save, L load, D delete, C clipboard, Z compress \\
+cs/5 & drag the blue box and the red points, TAB spline type \\
+cs/6 & 1-6 generated image, T texture filter, SPACE render texture \\
+cs/7 & UP/DOWN size, LEFT/RIGHT spacing, R rotate, TAB text \\
+cs/8 & right drag orbit, wheel zoom, TAB mode, LEFT CLICK pick \\
+cs/9 & 1 beep, 2 laser, 3 boom, M music, SPACE stream, UP/DOWN volume \\
+cs/10 & drag the two white dots, TAB switches the 2D/3D panel \\
+\bottomrule
+\end{tabular}
+\end{center}

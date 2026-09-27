@@ -1,0 +1,132 @@
+\chapter{Fonts and text}
+
+\lstinline|DrawText| with the built-in font gets you through a prototype. The
+moment you want a game that looks designed, you need the rest of rtext.
+
+\section{Loading a font properly}
+
+\begin{lstlisting}
+Font font = LoadFont("kenney.ttf");                     // default size 32
+Font font = LoadFontEx("kenney.ttf", 48, NULL, 0);      // the one you want
+\end{lstlisting}
+
+\lstinline|LoadFontEx| takes the size to rasterise at, and optionally a list of
+codepoints to include. Passing \lstinline|NULL, 0| gives you the default set of
+95 ASCII characters.
+
+\gotcha{A font is baked into a bitmap at \textbf{one fixed size}. Load it at 16
+and draw it at 64 and it will be blurry --- that is not a bug, it is a small
+image being stretched. Load it at, or slightly above, the largest size you will
+actually draw.}
+
+For accented characters, and for anything beyond English, you must say so at load
+time:
+
+\begin{lstlisting}
+int codepoints[512] = { 0 };
+for (int i = 0; i < 95; i++) codepoints[i] = 32 + i;        // basic ASCII
+for (int i = 0; i < 96; i++) codepoints[95 + i] = 0xC0 + i; // Latin-1 supplement
+
+Font font = LoadFontEx("font.ttf", 32, codepoints, 191);
+\end{lstlisting}
+
+A character you did not ask for simply does not render. If your accents come out
+as blanks or question marks, this is why.
+
+\section{Drawing with it}
+
+\begin{lstlisting}
+DrawText(text, x, y, size, colour);                          // default font only
+DrawTextEx(font, text, position, size, spacing, colour);     // any font
+DrawTextPro(font, text, position, origin, rot, size, spacing, colour);
+\end{lstlisting}
+
+\lstinline|DrawTextEx| is the everyday one. The \lstinline|spacing| parameter is
+extra pixels between characters, and it matters more than people expect: a value
+of 1 or 2 makes most fonts noticeably easier to read on screen.
+
+\lstinline|DrawTextPro| adds an origin and a rotation, for damage numbers that
+float and spin, or text that follows a curve.
+
+\section{Measuring, which is how you lay anything out}
+
+There is no alignment parameter anywhere in raylib. You measure and subtract:
+
+\begin{lstlisting}
+int w = MeasureText(txt, 20);                                // default font
+Vector2 size = MeasureTextEx(font, txt, 20, 2);              // any font, gives w AND h
+
+DrawText(txt, GetScreenWidth()/2 - w/2, y, 20, BLACK);       // centred
+DrawText(txt, GetScreenWidth() - w - 20, y, 20, BLACK);      // right aligned
+\end{lstlisting}
+
+\lstinline|MeasureTextEx| returning a \lstinline|Vector2| is what lets you draw a
+background box that fits its text, which is most of what a UI is:
+
+\begin{lstlisting}
+Vector2 s = MeasureTextEx(font, label, 20, 2);
+DrawRectangle(x - 8, y - 6, (int)s.x + 16, (int)s.y + 12, Fade(BLACK, 0.7f));
+DrawTextEx(font, label, (Vector2){ x, y }, 20, 2, RAYWHITE);
+\end{lstlisting}
+
+\section{The string helpers}
+
+rtext also contains a small string library, which exists because doing this in
+plain C is tedious:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|TextFormat("%i/%i", a, b)| & sprintf, managed buffer \\
+\lstinline|TextLength(s)| & like strlen \\
+\lstinline|TextSubtext(s, pos, len)| & a slice \\
+\lstinline|TextReplace(s, from, to)| & search and replace \\
+\lstinline|TextInsert(s, insert, pos)| & \\
+\lstinline|TextJoin(list, count, sep)| & \\
+\lstinline|TextSplit(s, delim, &count)| & split into pieces \\
+\lstinline|TextFindIndex(s, find)| & position, or $-1$ \\
+\lstinline|TextToUpper / TextToLower| & \\
+\lstinline|TextToInteger / TextToFloat| & parse \\
+\lstinline|TextCopy(dst, src)| & returns the byte count \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\gotcha{\lstinline|TextFormat|, \lstinline|TextSubtext|, \lstinline|TextReplace|
+and most of the others write into \textbf{internal rotating buffers}. The pointer
+is valid for drawing right now and becomes garbage after a few more calls. Never
+store one. If you need to keep the string, \lstinline|TextCopy| it into your own
+array.
+
+There is one exception that goes the other way: \lstinline|TextReplace| in some
+versions returns heap memory you must free. When in doubt, check the comment in
+\file{raylib.h} --- it says so per function.}
+
+\section{Unicode, briefly}
+
+In UTF-8 one character is not one byte. \lstinline|TextLength| counts
+\emph{bytes}; the number of characters --- codepoints --- can be smaller:
+
+\begin{lstlisting}
+int count = 0;
+int *codepoints = LoadCodepoints(utf8Text, &count);
+// count is the number of CHARACTERS, TextLength() is the number of BYTES
+UnloadCodepoints(codepoints);
+\end{lstlisting}
+
+This matters the day you let a player type their name and then try to delete one
+character with backspace. Deleting one byte from a multi-byte character produces
+garbage. \lstinline|GetCodepointPrevious()| gives you the correct amount to step
+back.
+
+\section{Where to get fonts}
+
+Any \file{.ttf} or \file{.otf} works. For games, pixel fonts hold up best at
+small sizes; Kenney's free asset packs and Google Fonts both have plenty that are
+free to ship. Load them with \lstinline|LoadFontEx| at the exact size you will
+draw, and set \lstinline|TEXTURE_FILTER_POINT| on \lstinline|font.texture| if it
+is a pixel font, so it stays crisp.
+
+\tryit{Module 7 draws the same string through all three functions, shows
+measuring and centring live, runs through every string helper with its output,
+and counts bytes against codepoints on a UTF-8 string.}{./cheatsheet/build.sh 7}

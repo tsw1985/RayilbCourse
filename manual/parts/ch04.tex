@@ -1,0 +1,89 @@
+\chapter{Input}
+
+\section{Three questions you can ask about a key}
+
+This is short but it matters enormously, because picking the wrong one of the
+three is the most common beginner bug in any engine.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Function} & \textbf{True when} & \textbf{Use it for} \\
+\midrule
+\lstinline|IsKeyDown(KEY_D)| & every frame it is held & walking, aiming, holding \\
+\lstinline|IsKeyPressed(KEY_D)| & the single frame it goes down & jump, shoot, menus \\
+\lstinline|IsKeyReleased(KEY_D)| & the single frame it comes up & charge-and-release \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Hold a key for one second at 60 FPS: \lstinline|IsKeyDown| is true sixty times,
+\lstinline|IsKeyPressed| is true once.
+
+\gotcha{Use \lstinline|IsKeyDown| for a menu and your cursor jumps sixty entries
+in one second. Use \lstinline|IsKeyPressed| for walking and your character
+teleports one step per tap and refuses to walk. When input ``feels broken'',
+check which of the two you used before anything else.}
+
+Key names are the obvious ones: \lstinline|KEY_A| to \lstinline|KEY_Z|,
+\lstinline|KEY_ZERO| to \lstinline|KEY_NINE|, \lstinline|KEY_SPACE|,
+\lstinline|KEY_ENTER|, \lstinline|KEY_LEFT_SHIFT|, \lstinline|KEY_LEFT_CONTROL|,
+\lstinline|KEY_UP|, \lstinline|KEY_LEFT|, \lstinline|KEY_TAB|,
+\lstinline|KEY_ESCAPE|. They are all listed in \file{raylib.h} under
+\lstinline|KeyboardKey|.
+
+\gotcha{\lstinline|KEY_ESCAPE| closes the window by default --- that is what
+\lstinline|WindowShouldClose()| watches. If you want Escape to open a pause menu
+instead, turn the default off with \lstinline|SetExitKey(KEY_NULL)| and handle it
+yourself.}
+
+\section{The mouse}
+
+\begin{lstlisting}
+Vector2 mouse = GetMousePosition();      // in SCREEN pixels
+float   wheel = GetMouseWheelMove();     // -1, 0 or +1 sized steps
+Vector2 delta = GetMouseDelta();         // how far it moved THIS frame
+
+if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))  { /* click */ }
+if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))    { /* held */ }
+\end{lstlisting}
+
+The same pressed/down/released trio applies to buttons.
+
+\lstinline|GetMouseDelta()| is the one that makes first person cameras possible.
+It reports movement rather than position, which is exactly what you want when
+the cursor is locked in place and can no longer move:
+
+\begin{lstlisting}
+DisableCursor();     // hide the cursor and lock it to the window centre
+EnableCursor();      // give it back to the user
+\end{lstlisting}
+
+With the cursor disabled, \lstinline|GetMousePosition()| stops being useful
+(the pointer is pinned) but \lstinline|GetMouseDelta()| keeps reporting how much
+the user moved the physical mouse. Chapter 12 turns that into a camera.
+
+\gotcha{Always call \lstinline|EnableCursor()| before \lstinline|CloseWindow()|,
+or a crash can leave the user's pointer captured and invisible. Every lesson in
+the 3D course does this.}
+
+\section{Text input}
+
+For a name entry field you do not want key codes, you want characters, with the
+keyboard layout and the shift key already applied:
+
+\begin{lstlisting}
+int c = GetCharPressed();
+while (c > 0)
+{
+    if ((c >= 32) && (c <= 125) && (length < MAX)) name[length++] = (char)c;
+    c = GetCharPressed();   // the queue may hold several this frame
+}
+if (IsKeyPressed(KEY_BACKSPACE) && length > 0) name[--length] = '\0';
+\end{lstlisting}
+
+It is a queue, so you loop until it is empty. Handle backspace with
+\lstinline|IsKeyPressed| because it is an action, not a character.
+
+\tryit{Lesson 3 shows the pressed-versus-down counters side by side. Hold SPACE
+for a second and compare the two numbers.}{./course2d/build.sh 3}

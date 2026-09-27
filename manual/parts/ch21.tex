@@ -1,0 +1,183 @@
+\chapter{raymath}
+
+raymath ships with raylib but is not included by \file{raylib.h}. You ask for it
+separately, and it has its own cheatsheet:
+
+\begin{lstlisting}
+#include "raymath.h"
+\end{lstlisting}
+
+It is header-only and every function is small and inlined, so using it costs
+nothing at run time. Chapter 11 listed the handful you meet first; this is the
+whole shape of it.
+
+\section{The three ideas worth understanding}
+
+Everything else is arithmetic. These three are concepts.
+
+\subsection{Normalize: direction without length}
+
+\begin{lstlisting}
+Vector3 dir = Vector3Normalize(Vector3Subtract(target, me));
+\end{lstlisting}
+
+A normalized vector has length exactly 1, so it carries a \emph{direction} and
+nothing else. Multiply it by a speed and you get a velocity; by a distance and
+you get an offset. Almost every movement line you will ever write is:
+
+\begin{lstlisting}
+position = Vector3Add(position, Vector3Scale(dir, speed*dt));
+\end{lstlisting}
+
+\gotcha{Normalizing a zero vector divides by zero. raylib's version guards
+against it and returns zero, but the habit of checking
+\lstinline|Vector3Length(v) > 0| before normalizing will save you elsewhere ---
+and it is why the movement code in chapter 12 tests the length first.}
+
+\subsection{Dot product: how much two directions agree}
+
+For two \emph{normalized} vectors, the dot product is a single number:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+$+1$ & pointing the same way \\
+$0$ & perpendicular \\
+$-1$ & pointing opposite ways \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+That makes it the answer to a surprising number of game questions:
+
+\begin{lstlisting}
+// Is the enemy in front of me, or behind?
+Vector3 toEnemy = Vector3Normalize(Vector3Subtract(enemy, camera.position));
+float facing = Vector3DotProduct(forward, toEnemy);
+if (facing > 0.0f) { /* somewhere in front */ }
+
+// Is it inside my 60-degree cone of vision?
+if (facing > cosf(30.0f*DEG2RAD)) { /* it can see me */ }
+\end{lstlisting}
+
+That second one is a whole enemy vision system in one line, and it is far cheaper
+than computing angles.
+
+\subsection{Cross product: perpendicular to both}
+
+3D only. Give it two directions, get a third at right angles to both:
+
+\begin{lstlisting}
+Vector3 right = Vector3CrossProduct(forward, (Vector3){ 0, 1, 0 });
+\end{lstlisting}
+
+That is the line from chapter 12 that gives you strafing. It is also how you
+compute a surface normal from a triangle's edges, which is how lighting knows
+which way a face points.
+
+\gotcha{The cross product is not commutative: \lstinline|cross(a, b)| points the
+opposite way to \lstinline|cross(b, a)|. If your strafe keys are swapped, this is
+why, and swapping the arguments is the fix.}
+
+\section{The families}
+
+\subsection{Utils}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|Lerp(a, b, t)| & blend: $t=0$ gives a, $t=1$ gives b \\
+\lstinline|Clamp(value, min, max)| & keep it in range \\
+\lstinline|Normalize(value, start, end)| & map a range onto 0..1 \\
+\lstinline|Remap(v, inA, inB, outA, outB)| & map one range onto another \\
+\lstinline|Wrap(value, min, max)| & wrap around, for angles \\
+\lstinline|FloatEquals(a, b)| & float comparison that is not a lie \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\lstinline|Remap| is the quiet hero. Converting a health value to a bar width, a
+mouse position to a world coordinate, a distance to a volume --- all one call:
+
+\begin{lstlisting}
+float volume = Remap(distance, 0.0f, 20.0f, 1.0f, 0.0f);   // near = loud
+\end{lstlisting}
+
+\subsection{Vector2, Vector3, Vector4}
+
+The same set exists for each, with the obvious names:
+\lstinline|Add|, \lstinline|Subtract|, \lstinline|Scale|, \lstinline|Multiply|,
+\lstinline|Divide|, \lstinline|Length|, \lstinline|LengthSqr|,
+\lstinline|Distance|, \lstinline|Normalize|, \lstinline|DotProduct|,
+\lstinline|Lerp|, \lstinline|Negate|, \lstinline|Min|, \lstinline|Max|.
+
+Plus a few that only make sense in one dimension:
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item 2D only --- \lstinline|Vector2Angle|, \lstinline|Vector2Rotate|
+  \item 3D only --- \lstinline|Vector3CrossProduct|,
+        \lstinline|Vector3RotateByQuaternion|
+\end{itemize}
+
+\keyidea{Use \lstinline|Vector3DistanceSqr| instead of
+\lstinline|Vector3Distance| when you only want to compare two distances. Skipping
+the square root is free, and comparing squared distances gives the same answer.
+With hundreds of enemies it is a measurable win.}
+
+\subsection{Matrix}
+
+A \lstinline|Matrix| is a 4$\times$4 grid of floats that encodes a transform:
+a translation, a rotation, a scale, or all three at once.
+
+\begin{lstlisting}
+Matrix t = MatrixTranslate(x, y, z);
+Matrix r = MatrixRotateY(angle);
+Matrix s = MatrixScale(2, 2, 2);
+
+Matrix combined = MatrixMultiply(MatrixMultiply(s, r), t);   // scale, then rotate, then move
+model.transform = combined;
+\end{lstlisting}
+
+\gotcha{Matrix multiplication is not commutative. Rotating then translating puts
+the object somewhere completely different from translating then rotating. In
+raylib's convention the transforms apply left to right, so read
+\lstinline|MatrixMultiply(s, r)| as ``scale, then rotate''.}
+
+You rarely build these by hand. Where they turn up is
+\lstinline|model.transform|, which lets you position a model without touching the
+draw call, and \lstinline|DrawMeshInstanced|, which takes an array of them.
+
+\subsection{Quaternion}
+
+A quaternion is four floats that represent a rotation. They exist because Euler
+angles --- yaw, pitch, roll --- have two problems: gimbal lock (chapter 12), and
+the fact that blending between two of them takes a scenic route.
+
+\begin{lstlisting}
+Quaternion q = QuaternionFromAxisAngle((Vector3){ 0, 1, 0 }, angle);
+Vector3 spun = Vector3RotateByQuaternion(point, q);
+
+Quaternion blended = QuaternionSlerp(from, to, t);    // smooth, shortest path
+\end{lstlisting}
+
+\lstinline|QuaternionSlerp| is the reason they exist: it interpolates between two
+orientations along the shortest arc, at constant speed. That is what every
+animation system and every smooth camera does internally.
+
+For a first person camera, two angles are simpler and perfectly adequate --- keep
+using yaw and pitch. Reach for quaternions when something needs to rotate freely
+in all three axes, like a spaceship or a physics object.
+
+\section{You do not have to use it}
+
+raymath is a convenience, not a requirement. \lstinline|position.x += speed*dt|
+is a perfectly good line of code, and for simple 2D work writing the arithmetic
+out is often clearer than nesting three function calls.
+
+Where it earns its place is 3D, where the vector operations get long and the
+chance of a typo in the third component is high.
+
+\tryit{Module 10 has two panels. In 2D, drag two vectors and watch add, subtract,
+dot, angle, lerp and rotate update live. Press TAB for the 3D panel, where the
+cross product and a quaternion rotation are drawn in
+space.}{./cheatsheet/build.sh 10}

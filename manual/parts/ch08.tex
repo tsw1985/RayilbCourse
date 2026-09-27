@@ -1,0 +1,100 @@
+\chapter{Camera2D: world coordinates and the Begin/End idea}
+
+\section{The problem with drawing in pixels}
+
+Everything so far has been drawn at screen pixels. That works until the world is
+bigger than the window. Then you find yourself writing
+\lstinline|DrawRectangle(enemy.x - scrollX, enemy.y - scrollY, ...)| on every
+single draw call, and forgetting the subtraction on one of them.
+
+The fix is to stop thinking in pixels. Store everything in \textbf{world}
+coordinates --- metres, tiles, whatever your game is made of --- and let a camera
+decide which part of the world the window is looking at.
+
+\section{Camera2D}
+
+\begin{lstlisting}
+typedef struct Camera2D {
+    Vector2 offset;     // where the target lands ON SCREEN (usually the middle)
+    Vector2 target;     // the WORLD point the camera is centred on
+    float rotation;     // degrees; rotates the whole world
+    float zoom;         // 1.0 normal, 2.0 twice as big. Never 0.
+} Camera2D;
+\end{lstlisting}
+
+The pair that confuses people is \lstinline|target| and \lstinline|offset|. Read
+it as a sentence: \emph{``the world point \lstinline|target| is displayed at the
+screen position \lstinline|offset|''}. So to centre the camera on the player you
+set \lstinline|target| to the player's world position and \lstinline|offset| to
+the middle of the window:
+
+\begin{lstlisting}
+camera.target = player;                                         // world
+camera.offset = (Vector2){ GetScreenWidth()/2.0f, GetScreenHeight()/2.0f };
+camera.zoom   = 1.0f;
+\end{lstlisting}
+
+\gotcha{\lstinline|zoom| defaults to \lstinline|0| if you write
+\lstinline|Camera2D camera = { 0 }| and forget to set it --- and a zoom of zero
+scales the entire world down to nothing. Black screen, no error, no clue. If your
+Camera2D shows nothing, this is why, every time.}
+
+\section{The Begin/End pair, which is the real lesson}
+
+\begin{lstlisting}
+BeginMode2D(camera);
+    // WORLD coordinates in here. The camera transforms everything.
+    DrawRectangle(player.x, player.y, 30, 30, BLUE);
+EndMode2D();
+
+// SCREEN pixels again out here. Nothing below moves with the camera.
+DrawText("HEALTH 100", 20, 20, 20, RAYWHITE);
+\end{lstlisting}
+
+\keyidea{Inside \lstinline|BeginMode2D|/\lstinline|EndMode2D| you are in world
+space and the camera moves things around. Outside, you are in screen pixels and
+nothing moves. The HUD goes outside. Always.}
+
+This is worth dwelling on, because in three chapters' time you will meet
+\lstinline|BeginMode3D| / \lstinline|EndMode3D| and it is the same idea with a
+different camera: the \lstinline|Begin| pushes a transform, the \lstinline|End|
+pops it. Your health bar sits outside the pair in both cases, for exactly the
+same reason.
+
+You can even nest them in one frame: draw the world in 3D, end the 3D mode, draw
+a 2D minimap and the HUD. That is precisely what the mini Doom in chapter 14
+does.
+
+\section{Going between the two worlds}
+
+Sooner or later you need to know what the mouse is pointing at in world
+coordinates --- to click an enemy, to place a tile:
+
+\begin{lstlisting}
+Vector2 worldPoint  = GetScreenToWorld2D(GetMousePosition(), camera);
+Vector2 screenPoint = GetWorldToScreen2D(enemy.position, camera);
+\end{lstlisting}
+
+The second one is how you put a floating name tag above a character: compute
+where the character is on screen, then draw text there \emph{outside} the
+Begin/End pair so it keeps a constant size no matter the zoom. The 3D course
+uses the 3D version of this same function to label the axes in lesson 1.
+
+\section{Making the camera feel good}
+
+A camera nailed to the player is correct and slightly nauseating. Real games lag
+behind a little. One line, using \lstinline|dt| as always:
+
+\begin{lstlisting}
+camera.target.x += (player.x - camera.target.x)*5.0f*dt;
+camera.target.y += (player.y - camera.target.y)*5.0f*dt;
+\end{lstlisting}
+
+Each frame the camera closes a fraction of the gap towards the player. Larger
+number, tighter follow. This is called exponential smoothing and it is worth
+knowing because it makes almost anything feel better: camera follow, aiming,
+health bars catching up to the real value.
+
+\tryit{Lesson 6 gives you a world far bigger than the window, with zoom and
+rotation, and a red crosshair drawn \emph{outside} the Begin/End pair so you can
+watch it refuse to move with the world.}{./course2d/build.sh 6}

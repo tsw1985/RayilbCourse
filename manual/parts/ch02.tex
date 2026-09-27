@@ -1,0 +1,182 @@
+\chapter{The shape of every raylib program}
+
+\section{Immediate mode, and why nothing stays on screen}
+
+Here is the idea that everything else in raylib hangs from. Most graphical
+toolkits you have met are \emph{retained mode}: you create a button object, you
+add it to a window, and it stays there. The toolkit remembers it and redraws it
+for you.
+
+raylib is \emph{immediate mode}. Nothing is remembered. There is no circle
+object. \lstinline|DrawCircle()| does not create a circle --- it paints circle
+shaped pixels, right now, and then forgets all about it. If you want the circle
+to still be there in a sixtieth of a second, you call \lstinline|DrawCircle()|
+again.
+
+\keyidea{Your program repaints the entire picture, from a blank canvas,
+sixty times a second. Everything you can see on screen is something you drew
+this frame. Everything you stop drawing disappears instantly.}
+
+This sounds wasteful and it is not: GPUs are extremely good at exactly this. And
+it buys you something precious for a beginner --- there is no hidden state. If
+something is on screen, a line in your code put it there this frame. If something
+is missing, a line in your code did not run. Debugging graphics becomes reading
+your own draw calls in order.
+
+\section{The skeleton}
+
+Every raylib program, from the ten line example to the full game, has this shape:
+
+\begin{lstlisting}
+#include "raylib.h"
+
+int main(void)
+{
+    InitWindow(800, 450, "My game");   // 1. once: open the window
+    SetTargetFPS(60);
+
+    while (!WindowShouldClose())       // 2. the frame loop
+    {
+        // UPDATE: change variables, draw nothing
+
+        BeginDrawing();                // 3. start painting
+            ClearBackground(RAYWHITE);
+            DrawText("Hello", 20, 20, 20, DARKGRAY);
+        EndDrawing();                  // 4. show it
+    }
+
+    CloseWindow();                     // 5. once: clean up
+    return 0;
+}
+\end{lstlisting}
+
+That is lesson 1 of the 2D course, near enough. Let us take the five parts apart.
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=8mm,
+  every node/.style={font=\sffamily\small},
+  bx/.style={draw=codeframe,fill=rlight,rounded corners=2pt,minimum width=6.2cm,minimum height=8mm,align=center},
+  lbx/.style={bx,fill=white,draw=rblue!40},
+  arrow/.style={-{Stealth[length=5pt]},rgrey}
+]
+\node[bx] (init) {\texttt{InitWindow()} \quad once};
+\node[lbx,below=of init] (check) {\texttt{WindowShouldClose()} ?};
+\node[lbx,below=of check] (update) {update your variables};
+\node[lbx,below=of update] (begin) {\texttt{BeginDrawing()}};
+\node[lbx,below=of begin] (clear) {\texttt{ClearBackground()}};
+\node[lbx,below=of clear] (draw) {all your \texttt{Draw...()} calls};
+\node[lbx,below=of draw] (end) {\texttt{EndDrawing()} \ \ swap buffers};
+\node[bx,below=14mm of end] (close) {\texttt{CloseWindow()} \quad once};
+
+\draw[arrow] (init) -- (check);
+\draw[arrow] (check) -- node[right,font=\sffamily\tiny,text=rgrey] {no} (update);
+\draw[arrow] (update) -- (begin);
+\draw[arrow] (begin) -- (clear);
+\draw[arrow] (clear) -- (draw);
+\draw[arrow] (draw) -- (end);
+\draw[arrow] (end.east) -- ++(1.5,0) |- node[right,pos=0.25,font=\sffamily\tiny,text=rgrey] {next frame} (check.east);
+\draw[arrow] (end) -- node[right,font=\sffamily\tiny,text=rgrey] {yes, quit} (close);
+\end{tikzpicture}
+\end{center}
+
+\subsection{1. InitWindow}
+
+\lstinline|InitWindow(width, height, title)| creates the window and, more
+importantly, the OpenGL context behind it. Until this line runs, no other raylib
+function works --- not loading a texture, not measuring text, nothing. Calling
+\lstinline|LoadTexture()| before \lstinline|InitWindow()| is a classic
+first-day crash.
+
+Flags are the exception: \lstinline|SetConfigFlags()| must be called
+\emph{before} \lstinline|InitWindow()|, because it configures how the window
+gets created. The two you will want:
+
+\begin{lstlisting}
+SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
+InitWindow(800, 450, "My game");
+\end{lstlisting}
+
+\lstinline|FLAG_VSYNC_HINT| syncs your drawing to the monitor's refresh so the
+image does not tear. \lstinline|FLAG_MSAA_4X_HINT| turns on antialiasing so
+diagonal edges stop looking like staircases.
+
+\subsection{2. WindowShouldClose}
+
+\lstinline|while (!WindowShouldClose())| is your game loop. The function returns
+true when the user presses Escape or clicks the window's close button, so the
+loop reads as ``keep going until they want out''.
+
+Each pass through this loop is one \emph{frame}. At 60 FPS the body of that loop
+runs 60 times a second, which gives you about 16 milliseconds to do everything.
+
+\subsection{3 and 4. BeginDrawing and EndDrawing}
+
+This pair is where the confusion usually is, so let us be precise.
+
+\lstinline|BeginDrawing()| says ``I am about to paint''. It prepares the canvas
+for this frame. Every \lstinline|Draw...()| call after it adds geometry to a
+batch that raylib is accumulating.
+
+\lstinline|EndDrawing()| does three jobs at once:
+
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item it flushes the batch --- everything you queued actually gets sent to the
+        GPU and drawn;
+  \item it swaps the buffers. You have been painting on a hidden canvas the whole
+        time; this is the moment it becomes the visible one. That is
+        \emph{double buffering}, and it is why you never see a half-drawn frame;
+  \item it polls input events and waits, if needed, to hit your target frame rate.
+\end{enumerate}
+
+\gotcha{Nothing appears on screen until \lstinline|EndDrawing()| runs. If you
+put a \lstinline|sleep()| or a long loop between \lstinline|BeginDrawing()| and
+\lstinline|EndDrawing()| hoping to see an animation, you will see nothing at all
+but a frozen window. Animation happens \emph{across} frames, never inside one.}
+
+\subsection{ClearBackground}
+
+The window still holds last frame's pixels. \lstinline|ClearBackground(RAYWHITE)|
+wipes them. Skip it and you get smears --- which, incidentally, is a fun thing to
+try once on purpose: comment it out in lesson 1 and move something around.
+
+\section{Update and draw: keep them apart}
+
+Notice how the skeleton has a comment saying ``UPDATE'' before
+\lstinline|BeginDrawing()|. That separation is not enforced by raylib, it is a
+discipline, and it is worth adopting from day one:
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Update} --- read input, move things, run the AI, check
+        collisions. Change variables. Draw nothing.
+  \item \textbf{Draw} --- paint the current state of those variables. Change nothing.
+\end{itemize}
+
+When the two get tangled you end up with bugs where an object reacts to a
+collision that was resolved half a frame ago, and they are miserable to find.
+Keeping them apart costs nothing and every lesson in this course does it.
+
+\section{Frame rate, and the two ways to control it}
+
+\lstinline|SetTargetFPS(60)| tells raylib to throttle the loop to at most 60
+iterations per second. Without it your loop runs as fast as the machine allows,
+burning 100\% of a CPU core to draw frames nobody will see.
+
+\lstinline|FLAG_VSYNC_HINT| does a similar job at a different level: it makes the
+buffer swap wait for the monitor. In practice, set both; they cooperate.
+
+Two useful readings, both free:
+
+\begin{lstlisting}
+int   fps = GetFPS();          // frames per second, as an integer
+float dt  = GetFrameTime();    // seconds the LAST frame took: ~0.0166 at 60fps
+double t  = GetTime();         // seconds since InitWindow()
+\end{lstlisting}
+
+\lstinline|GetFrameTime()| is the important one and it gets its own chapter
+(chapter 5). It is the difference between a game that behaves the same on every
+computer and one that does not.
+
+\tryit{Lesson 1 prints the frame counter, the elapsed time and the frame
+duration, live. Watch the frame counter climb and realise that every one of those
+numbers was repainted from scratch.}{./course2d/build.sh 1}

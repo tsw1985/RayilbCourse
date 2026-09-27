@@ -1,0 +1,97 @@
+\chapter{Time, and why everything is multiplied by delta time}
+
+\section{The problem}
+
+Here is a piece of code that looks completely reasonable and is wrong:
+
+\begin{lstlisting}
+if (IsKeyDown(KEY_D)) player.x += 5;      // WRONG
+\end{lstlisting}
+
+It says ``move five pixels per frame''. On a 60 Hz monitor that is 300 pixels a
+second. On a 144 Hz monitor it is 720. On a machine struggling at 30 FPS it is
+150. Your game is a different game on every computer, and if the frame rate
+stutters, the physics stutter with it.
+
+\section{The fix}
+
+\lstinline|GetFrameTime()| returns how long the previous frame took, in seconds.
+People universally call it \emph{delta time}, or \lstinline|dt|. At 60 FPS it is
+about \lstinline|0.0166|; at 120 FPS about \lstinline|0.0083|.
+
+\begin{lstlisting}
+float dt = GetFrameTime();
+float speed = 300.0f;                         // PIXELS PER SECOND
+
+if (IsKeyDown(KEY_D)) player.x += speed*dt;   // RIGHT
+\end{lstlisting}
+
+At 60 FPS that adds $300 \times 0.0166 = 5$ pixels. At 120 FPS it adds
+$300 \times 0.0083 = 2.5$ pixels, twice as often. Same distance per second, on
+every machine.
+
+\keyidea{Every speed you write down is per \emph{second}, and every time you
+apply it you multiply by \lstinline|dt|. Not sometimes --- always. Movement,
+rotation, timers, fading, reloading, animation. If a number changes over time,
+it is multiplied by \lstinline|dt|.}
+
+\section{Reading a movement line}
+
+Once the habit sticks, your constants start documenting themselves:
+
+\begin{lstlisting}
+float walkSpeed = 4.0f;       // metres per second  -> a person walking
+float runSpeed  = 8.0f;       // metres per second  -> a person running
+float turnSpeed = 90.0f;      // degrees per second -> a quarter turn each second
+float reload    = 1.5f;       // seconds
+\end{lstlisting}
+
+Compare that with ``0.066 per frame'' and you can see which version you would
+rather debug at midnight.
+
+\section{Timers}
+
+The same logic drives anything that happens after a delay. Add \lstinline|dt| to
+a counter and check it:
+
+\begin{lstlisting}
+float shootCooldown = 0.0f;
+
+// update
+if (shootCooldown > 0.0f) shootCooldown -= dt;
+
+if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && shootCooldown <= 0.0f)
+{
+    Shoot();
+    shootCooldown = 0.25f;     // four shots per second, on any machine
+}
+\end{lstlisting}
+
+Animation is the same pattern, and lesson 5 uses exactly this shape to step
+through a sprite sheet.
+
+\gotcha{Do not use \lstinline|GetTime()| for this. \lstinline|GetTime()| is
+absolute seconds since startup: fine for a clock, awkward for ``0.25 seconds from
+now'' because you have to remember when now was. Counting down a float with
+\lstinline|dt| is simpler and pauses for free when you stop updating it.}
+
+\section{The one case where delta time bites back}
+
+If the game freezes for a second --- a big file loads, you dragged the window,
+you hit a breakpoint --- the next \lstinline|dt| is huge. Everything moves a
+second's worth in one frame, and fast objects teleport straight through walls,
+because the collision check only looks at where they \emph{landed}, not the path
+they took.
+
+The standard defence is one line, and it is why you often see this in real games:
+
+\begin{lstlisting}
+float dt = GetFrameTime();
+if (dt > 0.05f) dt = 0.05f;    // never simulate more than 50 ms in one step
+\end{lstlisting}
+
+The game slows down briefly instead of exploding. Good enough for everything you
+will write for a long while.
+
+\tryit{Lesson 3 puts a green square that uses \lstinline|dt| next to a red square
+that does not, and drives both from the same keys.}{./course2d/build.sh 3}

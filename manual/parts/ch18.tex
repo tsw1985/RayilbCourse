@@ -1,0 +1,143 @@
+\chapter{Images, render textures and colour}
+
+Chapter 7 covered enough of rtextures to draw a sprite. This is the rest of the
+module: editing pixels, drawing into textures, and the colour helpers.
+
+\section{Image work happens on the CPU}
+
+An \lstinline|Image| is pixels in ordinary RAM, and raylib gives you a small
+image editor's worth of functions to work on them:
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|ImageResize / ImageResizeNN| & smooth, or nearest-neighbour for pixel art \\
+\lstinline|ImageCrop / ImageAlphaCrop| & cut a region, or trim transparent edges \\
+\lstinline|ImageFlipHorizontal / Vertical| & mirror \\
+\lstinline|ImageRotate / ImageRotateCW| & turn \\
+\lstinline|ImageColorTint / Invert / Grayscale| & recolour every pixel \\
+\lstinline|ImageColorBrightness / Contrast| & adjust \\
+\lstinline|ImageColorReplace| & swap one exact colour for another \\
+\lstinline|ImageDrawRectangle / Circle / Text| & \textbf{draw into the image} \\
+\lstinline|ImageDraw| & paste one image into another \\
+\lstinline|ImageFormat| & convert the pixel layout \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\gotcha{Almost all of these take a \lstinline|Image *| and modify it in place ---
+\lstinline|ImageResize(&img, 128, 128)|, not \lstinline|img = ImageResize(...)|.
+And they all work on the CPU, so they are far too slow to run every frame. Do
+them once at load time, then upload.}
+
+Use \lstinline|ImageCopy| before editing if you want to keep the original.
+
+\section{Generating images from nothing}
+
+\begin{lstlisting}
+GenImageColor(w, h, colour);                      // a flat fill
+GenImageGradientLinear(w, h, angle, a, b);        // a linear gradient
+GenImageGradientRadial(w, h, density, a, b);      // a radial one: glows, vignettes
+GenImageChecked(w, h, cw, ch, a, b);              // a checkerboard
+GenImageWhiteNoise(w, h, factor);                 // static
+GenImagePerlinNoise(w, h, offX, offY, scale);     // smooth noise: terrain, clouds
+GenImageCellular(w, h, tileSize);                 // organic cell patterns
+\end{lstlisting}
+
+This is how you get a game looking like something before an artist exists.
+\lstinline|GenImagePerlinNoise| feeding \lstinline|GenMeshHeightmap| from the
+last chapter gives you an entire landscape in four lines.
+
+\section{Render textures: drawing into a texture}
+
+A \lstinline|RenderTexture2D| is a texture you can draw into, with its own
+Begin/End pair:
+
+\begin{lstlisting}
+RenderTexture2D canvas = LoadRenderTexture(320, 240);     // once
+
+// in the loop, BEFORE BeginDrawing:
+BeginTextureMode(canvas);
+    ClearBackground(BLACK);
+    DrawCircle(160, 120, 40, ORANGE);
+EndTextureMode();
+
+BeginDrawing();
+    DrawTexture(canvas.texture, 0, 0, WHITE);
+EndDrawing();
+
+UnloadRenderTexture(canvas);                              // once
+\end{lstlisting}
+
+This unlocks four things you cannot do otherwise:
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Pixel-art at a fixed resolution.} Render your game at 320$\times$180
+        and scale it up to the window. Every pixel stays square and crisp, at any
+        window size.
+  \item \textbf{A real minimap.} Draw the world from a top-down camera into a
+        texture, then draw that texture in the corner.
+  \item \textbf{Fullscreen shader effects.} Render the scene into a texture, then
+        draw that texture through a shader. Bloom, colour grading, blur --- all
+        of it works this way.
+  \item \textbf{In-world screens.} Security monitors, mirrors, portals.
+\end{enumerate}
+
+\gotcha{A render texture comes out \textbf{upside down}, because OpenGL's Y axis
+points the other way. The fix is a negative height in the source rectangle:
+
+\lstinline|(Rectangle){ 0, 0, (float)rt.texture.width, -(float)rt.texture.height }|
+
+Use \lstinline|DrawTexturePro| or \lstinline|DrawTextureRec| with that, and never
+plain \lstinline|DrawTexture|, or your scene is mirrored vertically.}
+
+\section{Texture filters and mipmaps}
+
+\begin{lstlisting}
+SetTextureFilter(tex, TEXTURE_FILTER_POINT);        // crisp: pixel art
+SetTextureFilter(tex, TEXTURE_FILTER_BILINEAR);     // smooth: photos, 3D
+GenTextureMipmaps(&tex);
+SetTextureFilter(tex, TEXTURE_FILTER_TRILINEAR);    // smooth + mipmaps
+\end{lstlisting}
+
+\lstinline|POINT| is what makes pixel art look like pixel art; the default
+bilinear filter will blur your beautiful 16$\times$16 sprite into mush the moment
+you scale it.
+
+Mipmaps are pre-shrunk copies of a texture. Without them, a wall texture seen
+from far away shimmers as you walk, because each pixel is sampling a random spot
+in the full-size image. Generate them for anything in a 3D world; skip them for
+2D sprites drawn at their real size.
+
+\section{Colour helpers}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\lstinline|Fade(colour, 0.5f)| & same colour, half alpha \\
+\lstinline|ColorTint(colour, tint)| & multiply two colours \\
+\lstinline|ColorBrightness(colour, -0.4f)| & $-1$ black, $+1$ white \\
+\lstinline|ColorContrast(colour, 0.5f)| & \\
+\lstinline|ColorAlphaBlend(dst, src, tint)| & blend as if drawn on top \\
+\lstinline|ColorLerp(a, b, t)| & blend two colours \\
+\lstinline|ColorToHSV / ColorFromHSV| & hue, saturation, value \\
+\lstinline|ColorToInt / GetColor| & to and from \lstinline|0xRRGGBBAA| \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+HSV is the one worth knowing about. Shifting only the hue gives you a whole
+palette of related colours --- team colours, damage states, day and night --- from
+a single base:
+
+\begin{lstlisting}
+Vector3 hsv = ColorToHSV(base);
+Color enemyTeam = ColorFromHSV(hsv.x + 180, hsv.y, hsv.z);   // opposite hue
+\end{lstlisting}
+
+And \lstinline|GetColor(0x1F2430FF)| lets you paste hex values straight from a
+design tool, which is more pleasant than counting bytes.
+
+\tryit{Module 6 shows all six image generators, a chain of CPU edits, the four
+ways to draw a texture, a live render texture with its flipped source rectangle,
+and the colour helpers side by side.}{./cheatsheet/build.sh 6}

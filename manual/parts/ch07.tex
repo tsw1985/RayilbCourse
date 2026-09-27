@@ -1,0 +1,130 @@
+\chapter{Images, textures and sprites}
+
+\section{Two things that sound identical and are not}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & \textbf{\lstinline|Image|} & \textbf{\lstinline|Texture2D|} \\
+\midrule
+Lives in & normal RAM (CPU) & video memory (GPU) \\
+You can  & read and edit pixels & draw it, fast \\
+You cannot & draw it & edit single pixels \\
+Typical use & load, resize, recolour & everything you see \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The usual flow is: get an \lstinline|Image|, upload it once, throw the
+\lstinline|Image| away, draw the \lstinline|Texture2D| forever.
+
+\begin{lstlisting}
+Image img = LoadImage("player.png");        // into RAM
+ImageResize(&img, 64, 64);                  // cheap to edit here
+Texture2D tex = LoadTextureFromImage(img);  // upload to the GPU
+UnloadImage(img);                           // the RAM copy is dead weight now
+\end{lstlisting}
+
+If you do not need to touch the pixels, \lstinline|LoadTexture("player.png")|
+does all four steps for you.
+
+\section{The golden rule of loading}
+
+\gotcha{Load \textbf{outside} the loop, unload \textbf{after} the loop. Calling
+\lstinline|LoadTexture()| inside the frame loop uploads a fresh copy to the GPU
+sixty times a second. A minute later you are out of video memory and you have no
+idea why.}
+
+\begin{lstlisting}
+Texture2D tex = LoadTexture("player.png");   // once
+
+while (!WindowShouldClose())
+{
+    BeginDrawing();
+        DrawTexture(tex, 100, 100, WHITE);   // every frame: just draws
+    EndDrawing();
+}
+
+UnloadTexture(tex);                          // once
+CloseWindow();
+\end{lstlisting}
+
+The same rule covers fonts, sounds, music and models. Every
+\lstinline|Load...| has a matching \lstinline|Unload...|, and they belong on
+either side of the loop.
+
+\section{Drawing a texture, four ways}
+
+\begin{lstlisting}
+DrawTexture(tex, x, y, WHITE);                       // plain, at a position
+DrawTextureV(tex, position, WHITE);                  // same, Vector2
+DrawTextureEx(tex, position, rotation, scale, WHITE);// rotated and scaled
+DrawTextureRec(tex, source, position, WHITE);        // just a PIECE of it
+DrawTexturePro(tex, source, dest, origin, rot, WHITE); // everything at once
+\end{lstlisting}
+
+That \lstinline|WHITE| at the end is the \emph{tint}: the texture's colours get
+multiplied by it. \lstinline|WHITE| means ``unchanged''. Pass \lstinline|RED| and
+everything goes red; pass \lstinline|Fade(WHITE, 0.5f)| and the sprite is half
+transparent. This is how you flash a character on damage without a second image.
+
+\section{Sprite sheets}
+
+An animation is not many files, it is one image holding many frames side by side,
+plus a \lstinline|Rectangle| that says which frame to show:
+
+\begin{center}
+\begin{tikzpicture}[scale=0.9,every node/.style={font=\sffamily\footnotesize}]
+  \foreach \i in {0,1,2,3,4,5} {
+    \draw[codeframe,fill=rlight] (\i*1.5,0) rectangle (\i*1.5+1.5,1.5);
+    \node[text=rgrey] at (\i*1.5+0.75,0.75) {\i};
+  }
+  \draw[rred,line width=1.4pt] (3,0) rectangle (4.5,1.5);
+  \node[text=rred] at (3.75,-0.4) {source rectangle};
+  \node[text=rgrey] at (4.5,1.95) {one texture, six frames};
+\end{tikzpicture}
+\end{center}
+
+\begin{lstlisting}
+Rectangle source = { frame*FRAME_SIZE, 0, FRAME_SIZE, FRAME_SIZE };
+DrawTextureRec(sheet, source, position, WHITE);
+\end{lstlisting}
+
+And you advance \lstinline|frame| on a timer, never on a frame counter, for the
+reason chapter 5 gave:
+
+\begin{lstlisting}
+frameTimer += dt;
+while (frameTimer >= frameDuration)
+{
+    frameTimer -= frameDuration;
+    frame = (frame + 1) % FRAME_COUNT;
+}
+\end{lstlisting}
+
+\gotcha{To flip a sprite horizontally, make the source rectangle's
+\lstinline|width| \emph{negative}. It reads like a bug and it is the intended
+API: \lstinline|source.width *= -1| and your character faces the other way,
+with no second image and no rotation.}
+
+\section{Where files are looked for}
+
+Paths are relative to the \emph{working directory}, which is wherever you
+launched the program from, not where the executable sits. That is why running
+from an IDE sometimes finds your \file{.png} and running from a terminal does
+not.
+
+This project ships a helper for exactly that, in \file{src/resource\_dir.h}:
+
+\begin{lstlisting}
+SearchAndSetResourceDir("resources");   // find it and chdir there
+Texture2D tex = LoadTexture("wabbit_alpha.png");
+\end{lstlisting}
+
+\gotcha{A texture that failed to load is not a crash: you get a texture with
+\lstinline|id == 0| and you draw nothing, silently. If a sprite is invisible,
+check \lstinline|IsTextureValid(tex)| before suspecting your draw code.}
+
+\tryit{Lesson 5 builds a six frame sprite sheet in memory --- no external files
+--- and plays it back, showing the whole sheet, the current frame, and the source
+rectangle moving across it.}{./course2d/build.sh 5}

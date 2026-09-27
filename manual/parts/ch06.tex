@@ -1,0 +1,108 @@
+\chapter{Collisions in 2D: the rehearsal}
+
+Everything in this chapter comes back, almost unchanged, in 3D. Learn it here
+where you can see it, and chapter 13 will feel like a rerun.
+
+\section{Detecting}
+
+Two rectangles overlap if they overlap on \textbf{both} axes at once. One axis
+where they do not overlap is enough to guarantee they are apart:
+
+\begin{center}
+\begin{tikzpicture}[scale=0.82,every node/.style={font=\sffamily\footnotesize}]
+  % case 1: overlap
+  \begin{scope}
+    \fill[rblue!25,draw=rblue] (0,0) rectangle (2.2,1.6);
+    \fill[rorange!25,draw=rorange] (1.4,0.7) rectangle (3.4,2.1);
+    \node at (1.7,-0.55) {overlap on X \textbf{and} Y};
+    \node[text=rgreen] at (1.7,-1.05) {\textbf{HIT}};
+  \end{scope}
+  % case 2: no overlap on X
+  \begin{scope}[xshift=5.6cm]
+    \fill[rblue!25,draw=rblue] (0,0) rectangle (1.6,1.6);
+    \fill[rorange!25,draw=rorange] (2.4,0.7) rectangle (4.0,2.1);
+    \draw[<->,rgrey] (1.6,-0.3) -- node[below] {gap} (2.4,-0.3);
+    \node at (2.0,-0.95) {no overlap on X};
+    \node[text=rred] at (2.0,-1.45) {\textbf{no hit}};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\begin{lstlisting}
+bool overlapX = (a.x < b.x + b.width)  && (a.x + a.width  > b.x);
+bool overlapY = (a.y < b.y + b.height) && (a.y + a.height > b.y);
+bool hit = overlapX && overlapY;
+\end{lstlisting}
+
+raylib gives you that in one call, and a few relatives:
+
+\begin{lstlisting}
+CheckCollisionRecs(recA, recB);                        // box vs box
+CheckCollisionCircles(centreA, rA, centreB, rB);       // circle vs circle
+CheckCollisionCircleRec(centre, radius, rec);          // circle vs box
+CheckCollisionPointRec(GetMousePosition(), button);    // is the mouse over it?
+\end{lstlisting}
+
+That last one is how you write a button without any UI library: a
+\lstinline|Rectangle|, a \lstinline|CheckCollisionPointRec|, and
+\lstinline|IsMouseButtonPressed|. Three lines, and you own it completely.
+
+\section{Resolving, which is the hard half}
+
+Knowing that you hit a wall does not stop you. The naive fix --- ``if I hit
+something, do not move at all'' --- produces a game that feels awful: walk into a
+wall at a slight angle and you stop dead instead of sliding along it.
+
+The trick is to treat the axes separately:
+
+\begin{center}
+\begin{tikzpicture}[scale=0.9,every node/.style={font=\sffamily\footnotesize}]
+  \fill[rgrey!25,draw=rgrey] (0,0) rectangle (7,0.6);
+  \node[text=rgrey] at (3.5,0.3) {wall};
+
+  \fill[rblue!30,draw=rblue] (1,0.9) rectangle (1.8,1.7);
+  \draw[->,rink,line width=1pt] (1.4,1.3) -- (2.5,0.55) node[right,pos=1.1] {wanted: X and Y};
+
+  \fill[rblue!30,draw=rblue] (3.6,0.9) rectangle (4.4,1.7);
+  \draw[->,rgreen,line width=1.2pt] (4.0,1.3) -- (5.1,1.3) node[right] {X allowed};
+  \draw[->,rred,line width=1.2pt,dashed] (4.0,1.3) -- (4.0,0.75) node[below right] {Y refused};
+\end{tikzpicture}
+\end{center}
+
+\begin{lstlisting}
+// 1. try the X move on its own
+Rectangle attempt = player;
+attempt.x += dx;
+if (!HitsAnyWall(attempt)) player.x = attempt.x;   // otherwise: keep old x
+
+// 2. try the Y move on its own
+attempt = player;
+attempt.y += dy;
+if (!HitsAnyWall(attempt)) player.y = attempt.y;   // otherwise: keep old y
+\end{lstlisting}
+
+Walking diagonally into a horizontal wall, the Y step is refused and the X step
+is allowed, so you slide along it. That is the whole secret, and it is the same
+code in 3D with \lstinline|z| in place of \lstinline|y|.
+
+\keyidea{Detect with one call. Resolve one axis at a time. Two moves, two
+checks, never both at once.}
+
+\section{Keeping things on screen}
+
+The cheapest collision of all, and one every game needs:
+
+\begin{lstlisting}
+if (player.x < 0) player.x = 0;
+if (player.y < 0) player.y = 0;
+if (player.x + player.width  > GetScreenWidth())  player.x = GetScreenWidth()  - player.width;
+if (player.y + player.height > GetScreenHeight()) player.y = GetScreenHeight() - player.height;
+\end{lstlisting}
+
+Note it clamps \emph{after} the move rather than refusing it. For a wall you want
+to refuse the move; for a screen edge, clamping feels better because the player
+keeps sliding along the border.
+
+\tryit{Lesson 4 has a little maze. SPACE switches the walls between ``solid''
+(resolved per axis) and ``ghost'' (detected only) so you can feel the
+difference.}{./course2d/build.sh 4}

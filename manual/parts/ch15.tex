@@ -1,0 +1,207 @@
+\chapter{Sound and music}
+
+Of everything left in the library, this is the one that changes how finished your
+game feels for the least work. Three function calls and the mini Doom stops being
+a tech demo.
+
+\section{One line before anything}
+
+\begin{lstlisting}
+InitAudioDevice();      // right after InitWindow
+...
+CloseAudioDevice();     // right before CloseWindow
+\end{lstlisting}
+
+Nothing in raudio works before that call, exactly like \lstinline|InitWindow| for
+graphics. If sounds silently do nothing, check this first.
+
+\section{The four things raudio gives you}
+
+\begin{center}
+\begin{tabular}{@{}llp{6.4cm}@{}}
+\toprule
+\textbf{Type} & \textbf{Lives} & \textbf{Use it for} \\
+\midrule
+\lstinline|Wave| & in RAM, raw samples & building or editing audio yourself \\
+\lstinline|Sound| & in RAM, decoded & short clips: gunshots, steps, clicks \\
+\lstinline|Music| & streamed from disk & long tracks: the soundtrack \\
+\lstinline|AudioStream| & you push samples & synthesisers, anything procedural \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The split between \lstinline|Sound| and \lstinline|Music| is about memory. A
+three minute track decoded into RAM is around 30 MB; streamed, it costs a few
+kilobytes of buffer. A footstep is 4 KB either way, so it may as well be resident
+and instant.
+
+\section{Sounds}
+
+\begin{lstlisting}
+Sound shot = LoadSound("shot.wav");      // once, outside the loop
+
+if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) PlaySound(shot);
+
+UnloadSound(shot);                       // once, after the loop
+\end{lstlisting}
+
+Same load-outside, unload-after rule as textures. raylib reads \file{.wav},
+\file{.ogg}, \file{.mp3}, \file{.flac}, \file{.qoa} and a few more.
+
+\lstinline|PlaySound| does not wait and does not queue --- it fires and returns
+immediately. Call it twice in one frame and you get two overlapping copies, which
+is exactly what you want for gunfire.
+
+\subsection{The trick that makes repeated sounds bearable}
+
+A sound effect played identically fifty times in ten seconds becomes torture.
+Real games vary it slightly on every shot:
+
+\begin{lstlisting}
+SetSoundPitch(shot, 0.85f + GetRandomValue(0, 30)/100.0f);
+SetSoundPan(shot, GetRandomValue(20, 80)/100.0f);
+PlaySound(shot);
+\end{lstlisting}
+
+Pitch is a multiplier, so 1.0 is unchanged and 0.5 is an octave down. Pan runs
+0.0 (left) to 1.0 (right), with 0.5 centred.
+
+\gotcha{\lstinline|SetSoundPitch| changes that \lstinline|Sound| object for
+every future play, not just the next one. If you want two enemies to sound
+different at the same time you need \lstinline|LoadSoundAlias()|, which shares
+the samples but gives you a second set of playback settings, and costs almost
+nothing.}
+
+\section{Music}
+
+\begin{lstlisting}
+Music track = LoadMusicStream("theme.ogg");
+track.looping = true;
+PlayMusicStream(track);
+
+while (!WindowShouldClose())
+{
+    UpdateMusicStream(track);     // <-- EVERY FRAME. Not optional.
+    ...
+}
+
+UnloadMusicStream(track);
+\end{lstlisting}
+
+\gotcha{\lstinline|UpdateMusicStream()| is the single most forgotten call in
+raylib. It refills the streaming buffer from disk. Miss it and your music plays
+for a fraction of a second and stops --- no error, no warning, just silence. If
+music ``does not work'', this is the reason nine times out of ten.}
+
+Pause, resume and seek behave as you would expect, and two getters let you draw a
+progress bar:
+
+\begin{lstlisting}
+PauseMusicStream(track);  ResumeMusicStream(track);  StopMusicStream(track);
+SeekMusicStream(track, 30.0f);                        // jump to 30 seconds
+
+float played = GetMusicTimePlayed(track);
+float length = GetMusicTimeLength(track);
+\end{lstlisting}
+
+\section{Making sounds with no sound files}
+
+You do not need an artist to get started. A \lstinline|Wave| is just numbers, and
+a 16-bit mono wave is one \lstinline|short| per sample, from $-32768$ to $32767$:
+
+\begin{lstlisting}
+Wave wave = { 0 };
+wave.sampleRate = 44100;      // samples per second
+wave.sampleSize = 16;         // bits per sample
+wave.channels   = 1;          // mono
+wave.frameCount = 44100/5;    // a fifth of a second
+
+short *samples = (short *)MemAlloc(wave.frameCount*sizeof(short));
+
+float phase = 0.0f;
+for (unsigned int i = 0; i < wave.frameCount; i++)
+{
+    float t = (float)i/wave.frameCount;        // 0..1 through the sound
+    float hz = 1400.0f + (200.0f - 1400.0f)*t; // pitch slides DOWN
+    phase += 2.0f*PI*hz/44100.0f;
+
+    float envelope = (1.0f - t)*(1.0f - t);    // fade out, or it clicks
+    samples[i] = (short)(sinf(phase)*envelope*22000.0f);
+}
+
+wave.data = samples;
+Sound laser = LoadSoundFromWave(wave);
+\end{lstlisting}
+
+Three ideas are doing all the work there, and they are the whole of retro sound
+design:
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item \textbf{A sine wave} gives you a pure tone. \lstinline|phase| accumulates
+        and \lstinline|sinf(phase)| oscillates.
+  \item \textbf{Sliding the pitch} turns a beep into a laser (down) or a power-up
+        (up).
+  \item \textbf{An envelope} --- multiplying by a value that falls to zero ---
+        makes it a sound instead of a rude noise. Without a fade-out, the sound
+        stops mid-oscillation and the speaker cone jumps, which you hear as a
+        click.
+\end{itemize}
+
+Mix in random noise instead of a sine and you have an explosion. That is
+literally what the \textbf{rFXGen} tool on raylib.com does, with sliders.
+
+\gotcha{Use \lstinline|MemAlloc()| rather than \lstinline|malloc()| for wave
+data. \lstinline|UnloadWave()| frees it with raylib's allocator, and mixing
+allocators is the kind of bug that crashes only on some machines.}
+
+\subsection{Wave and Sound are two separate allocations}
+
+\lstinline|LoadSoundFromWave| copies the samples to the audio device. The
+original \lstinline|Wave| is still yours, and still needs freeing:
+
+\begin{lstlisting}
+UnloadSound(laser);
+UnloadWave(wave);      // both, not one
+\end{lstlisting}
+
+You can also write it out --- \lstinline|ExportWave(wave, "laser.wav")| --- which
+is a genuinely useful way to build a sound in code, listen to it, and then ship
+the file.
+
+\section{Audio streams, for sound you generate live}
+
+When the samples cannot exist ahead of time --- a synthesiser, an engine note
+that follows the revs, voice chat --- you push them yourself:
+
+\begin{lstlisting}
+AudioStream stream = LoadAudioStream(44100, 16, 1);
+PlayAudioStream(stream);
+
+// in the loop:
+if (IsAudioStreamProcessed(stream))     // the device wants more
+{
+    static short chunk[4096];
+    for (int i = 0; i < 4096; i++) { phase += step; chunk[i] = ...; }
+    UpdateAudioStream(stream, chunk, 4096);
+}
+\end{lstlisting}
+
+The contract is: ask whether a buffer has been consumed, and if so, hand over the
+next one. Miss the window and you hear a gap.
+
+\section{Volume, and being polite}
+
+\begin{lstlisting}
+SetMasterVolume(0.6f);            // everything
+SetSoundVolume(shot, 0.4f);       // one sound
+SetMusicVolume(track, 0.5f);      // one track
+\end{lstlisting}
+
+Ship with the master volume somewhere around 0.5 and put it in an options menu.
+Players will forgive almost anything except a game that is deafening on the first
+launch.
+
+\tryit{Module 9 synthesises a beep, a laser and an explosion in C, writes a
+four second tune to a real \file{.wav} and streams it back, and lets you play a
+live tone with the mouse controlling the pitch. No audio files
+involved.}{./cheatsheet/build.sh 9}

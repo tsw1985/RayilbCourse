@@ -1,0 +1,117 @@
+\chapter{When something goes wrong}
+
+\section{It will not compile or link}
+
+\begin{center}
+\begin{tabular}{@{}p{6.1cm}p{7.4cm}@{}}
+\toprule
+\textbf{Message} & \textbf{What it means} \\
+\midrule
+\lstinline|raylib.h: No such file| & the compiler cannot find the header. Your
+\lstinline|-I| path is wrong. \\[4pt]
+\lstinline|undefined reference to 'InitWindow'| & the header was found but the
+library was not. Check the \file{.a} path, and that it comes \emph{after} your
+\file{.c} on the command line. \\[4pt]
+\lstinline|undefined reference to 'Vector3Add'| & you forgot
+\lstinline|#include "raymath.h"|, or \lstinline|-lm| for the maths library. \\[4pt]
+\lstinline|undefined reference to 'glfwInit'| & the system libraries are missing
+from the link: \lstinline|-lpthread -lm -ldl -lrt -lX11|. \\[4pt]
+\lstinline|expected expression before '{'| & a compound literal with no cast.
+Write \lstinline|(Vector3){ 1, 2, 3 }|, not \lstinline|{ 1, 2, 3 }|. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{The window is there but the screen is black}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Is there a \lstinline|BeginDrawing()| and an
+        \lstinline|EndDrawing()|?} Nothing shows until \lstinline|EndDrawing()|.
+  \item \textbf{Is \lstinline|ClearBackground()| the same colour as everything
+        you draw?} Black text on a black background is a surprisingly popular
+        first bug.
+  \item \textbf{Camera2D with \lstinline|zoom == 0|.} A zero zoom scales the
+        world to nothing. If you wrote \lstinline|Camera2D cam = { 0 }| you must
+        set \lstinline|cam.zoom = 1.0f|.
+  \item \textbf{Is the camera inside a wall, or looking the wrong way?} Print
+        \lstinline|camera.position| and \lstinline|camera.target| and see.
+  \item \textbf{Is the object behind the camera?} In 3D, things behind you are
+        clipped away entirely.
+\end{enumerate}
+
+\section{The thing I drew is not there}
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Draw order.} Something opaque drawn afterwards is covering it.
+  \item \textbf{Inside or outside the Begin/End pair?} A HUD element accidentally
+        drawn inside \lstinline|BeginMode3D| is somewhere out in the world,
+        about one metre from the origin, and you will never find it by looking.
+  \item \textbf{Triangle winding.} \lstinline|DrawTriangle| with clockwise
+        vertices is invisible. Swap two of them.
+  \item \textbf{A texture that did not load.} You get a silent no-op, not a
+        crash. Check with \lstinline|IsTextureValid()|, and remember that paths
+        are relative to where you \emph{launched} the program.
+  \item \textbf{Alpha zero.} \lstinline|BLANK| and a badly built
+        \lstinline|Color| both draw perfectly invisible pixels.
+\end{itemize}
+
+\section{It moves wrong}
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Too fast or too slow on another machine} --- a
+        \lstinline|GetFrameTime()| is missing somewhere.
+  \item \textbf{Faster diagonally} --- the movement vector is not normalized.
+  \item \textbf{Flies into the sky when looking up} --- you used the full
+        \lstinline|forward| to walk instead of the flattened one.
+  \item \textbf{Camera snaps when looking straight up} --- the pitch is not
+        clamped. Gimbal lock.
+  \item \textbf{Vertical movement inverted} --- you are in screen space where Y
+        grows down, or you mixed the sign on the mouse pitch.
+  \item \textbf{One step per key tap} --- \lstinline|IsKeyPressed| where you
+        wanted \lstinline|IsKeyDown|.
+\end{itemize}
+
+\section{The collisions are wrong}
+
+\begin{enumerate}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Draw the box.} \lstinline|DrawBoundingBox()| in 3D,
+        \lstinline|DrawRectangleLinesEx()| in 2D. Most collision bugs become
+        obvious the instant you can see the box.
+  \item \textbf{Eyes versus body.} \lstinline|camera.position| is head height.
+        The collision box belongs around the body, half a body lower.
+  \item \textbf{Stale box.} If you build the box before moving and test it after,
+        you are testing last frame's position.
+  \item \textbf{Getting stuck on corners} --- you are testing both axes at once.
+        Split them.
+  \item \textbf{Tunnelling through walls at speed} --- the object moved further
+        in one frame than the wall is thick. Clamp \lstinline|dt|, or move in
+        smaller steps.
+\end{enumerate}
+
+\section{It flickers}
+
+Two surfaces occupying exactly the same plane fight over the same pixels; the
+depth buffer cannot decide between them, and the result shimmers as the camera
+moves. It is called z-fighting. Move one of them a hair: \lstinline|0.01f| is
+invisible to the eye and decisive to the GPU.
+
+\section{It runs at four frames per second}
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+  \item \textbf{Loading inside the loop.} A \lstinline|LoadTexture()| or
+        \lstinline|LoadModel()| in the frame loop will do this immediately.
+  \item \textbf{Tens of thousands of draw calls.} Each
+        \lstinline|DrawCube| is cheap, but a $200\times200$ grid of them is
+        40,000 per frame. Only draw what is near the player.
+  \item \textbf{\lstinline|DrawPixel| in a loop.} It is a whole draw call per
+        pixel. The header warns you about this in its own comment.
+  \item \textbf{You are looking at a debug build.} \lstinline|make config=release_x64|
+        is a great deal faster.
+\end{itemize}
+
+\section{When none of that helps}
+
+Print things. \lstinline|DrawText(TextFormat(...))| on screen, or
+\lstinline|TraceLog(LOG_INFO, "x = %f", x)| to the terminal. Graphics bugs look
+mysterious and are almost always a number being different from what you assumed.
+Put the number on the screen and the mystery usually lasts about ten seconds.
